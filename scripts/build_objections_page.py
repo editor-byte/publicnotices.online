@@ -45,17 +45,17 @@ MIN_DRAW = 9.0
 # Taken from the Hackney Citizen's own planning and traffic cards, so the
 # portal reads as the same publication rather than a separate product.
 CAT_COLOUR = {
-    "Extensions and alterations": "#6f6353",
-    "Listed building consent": "#7d2436",
-    "Signs and shopfronts": "#6a4b8a",
-    "New homes": "#2a5a7a",
-    "Change of use": "#a2542a",
-    "Major development": "#2f6b45",
-    "Infrastructure": "#5f574b",
-    "Opening hours": "#b3801c",
+    "Extensions and alterations": "#6f6353",   # taupe
+    "Listed building consent": "#7d2436",      # oxblood
+    "Change of use": "#a2542a",                # rust
+    "Signs and shopfronts": "#b06a1f",         # burnt ochre
+    "New homes": "#5d6b33",                    # olive
+    "Major development": "#324028",            # deep forest
+    "Opening hours": "#c08a2e",                # mustard
+    "Infrastructure": "#928a79",               # stone
 }
 CAT_FALLBACK = "#6f6353"
-TRAFFIC_COLOUR = "#1f6f8b"
+TRAFFIC_COLOUR = "#3a3630"   # charcoal
 
 # Sites with no postcode at all. Add a British National Grid easting and
 # northing to put one on the map; otherwise it is listed without a pin.
