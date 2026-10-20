@@ -1,0 +1,97 @@
+name: Rebuild and publish
+
+# 06:20 UTC daily. GitHub schedules in UTC and does not follow BST, so this
+# is 7.20am British Summer Time and 6.20am in winter. Minute 20 rather than
+# 00 because GitHub's schedulers are busiest on the hour and jobs queued
+# then are the most likely to be delayed or dropped.
+on:
+  schedule:
+    - cron: "20 6 * * *"
+  workflow_dispatch:        # lets you run it by hand from the Actions tab
+  push:
+    branches: [main]
+    paths:
+      - "embeds/**"         # a new fortnightly notice rebuilds immediately
+      - "scripts/**"
+      - "data/**"
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # No pip install step: every script is standard library only.
+
+      - name: Fetch current traffic orders
+        run: python3 scripts/traffic_ingest.py
+
+      - name: Check the traffic feed actually returned something
+        # A silent empty result is the failure mode that would quietly
+        # publish a page claiming nothing is open. Zero schemes open is
+        # legitimate; zero records is not.
+        run: |
+          f=$(ls -1 traffic_probe/traffic-geometry-*.geojson 2>/dev/null | tail -1)
+          if [ -z "$f" ]; then
+            echo "::error::No geometry file was produced — Traffweb may have changed"
+            exit 1
+          fi
+          n=$(python3 -c "import json,sys;print(len(json.load(open('$f'))['features']))")
+          echo "$n restriction records"
+          if [ "$n" -lt 1 ]; then
+            echo "::error::Traffweb returned no records at all"
+            exit 1
+          fi
+
+      - name: Parse the published planning notices
+        run: python3 scripts/parse_planning.py embeds/*.html
+
+      - name: Build the page
+        run: |
+          mkdir -p public
+          DATA="--wards data/hackney-wards.json \
+                --roads data/hackney-roads.json \
+                --postcodes data/hackney-postcodes.json"
+          python3 scripts/build_objections_page.py --fullpage $DATA \
+            --out public/index.html
+          python3 scripts/build_objections_page.py $DATA --out public/card.html
+          cp CNAME public/CNAME 2>/dev/null || true
+          ls -la public
+
+      - name: Keep the data files for inspection
+        # Handy when a figure on the page looks wrong: the exact inputs for
+        # every build are downloadable from the run for 14 days.
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-data
+          retention-days: 14
+          path: |
+            traffic_probe/*.csv
+            traffic_probe/*.geojson
+            planning-applications.csv
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

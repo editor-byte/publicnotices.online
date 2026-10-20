@@ -1,0 +1,15 @@
+# Built output and fetched data: regenerated on every run.
+public/
+traffic_probe/
+objections.html
+objections-card.html
+traffic-map-card.html
+planning-applications.csv
+borough-coverage*.csv
+__pycache__/
+.DS_Store
+
+# The 606 MB OS downloads: used once to make the data files, never committed.
+oproad_essh_gb/
+codepo_gb/
+*.zip
