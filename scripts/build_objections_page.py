@@ -964,6 +964,14 @@ svg[data-k="4"] .rl{{display:inline}}
 .zoom button{{font:inherit;width:2.1rem;height:2.1rem;border-radius:8px;
   border:1px solid var(--rule);background:#fbfaf2;color:var(--ink);
   cursor:pointer;font-size:1rem;line-height:1}}
+.tip{{position:absolute;pointer-events:none;z-index:5;max-width:17rem;
+  background:var(--brand);color:#f4f1e1;border-radius:9px;
+  padding:.5rem .7rem;font-size:.85rem;line-height:1.35;
+  box-shadow:0 4px 14px rgba(0,0,0,.25);opacity:0;transition:opacity .09s;
+  border-left:4px solid var(--accent)}}
+.tip.on{{opacity:1}}
+.tip b{{display:block;font-size:.95rem}}
+.tip i{{font-style:normal;color:#c9c7ae}}
 .hint{{position:absolute;left:14px;bottom:14px;background:var(--paper);
   border-radius:999px;padding:.4rem .9rem;font-size:.82rem;color:var(--quiet);
   box-shadow:0 2px 8px rgba(0,0,0,.1)}}
@@ -1053,6 +1061,7 @@ svg[data-k="4"] .rl{{display:inline}}
     <button id="zout" aria-label="Zoom out">−</button>
     <button id="zreset" aria-label="Reset the view">⤾</button>
   </div>
+  <div class="tip" id="tip" role="status"></div>
   <div class="hint" id="hint">Scroll to zoom · drag to pan</div>
 </main>
 </div>
@@ -1115,6 +1124,41 @@ svg[data-k="4"] .rl{{display:inline}}
     }});
   }});
 
+  // ---- hover preview ---------------------------------------------------
+  var drag=null;        // declared here because the hover code checks it
+  // One tooltip, following the pointer. Brief by design: the full detail
+  // belongs in the panel, on click. A short delay stops it flickering as
+  // the pointer sweeps across a cluster.
+  var tip=$('tip'), tipTimer=null, stage=document.querySelector('.stage');
+  function tipHide(){{ clearTimeout(tipTimer); tip.classList.remove('on'); }}
+  function tipShow(p,e){{
+    var d=D[p.getAttribute('data-id')]; if(!d) return;
+    var n=d.items.length;
+    tip.innerHTML='<b>'+d.title+'</b><i>'+d.sub+
+      (n>1?' · '+n+' item'+(n===1?'':'s'):'')+'</i><br>'+
+      (shut(d.close)?'Closed ':'Comment by ')+d.closeTxt;
+    var r=stage.getBoundingClientRect();
+    var x=e.clientX-r.left+14, y=e.clientY-r.top+14;
+    // Flip back inside the stage rather than overflowing it.
+    if(x+280>r.width) x=e.clientX-r.left-280;
+    if(y+90>r.height) y=e.clientY-r.top-90;
+    tip.style.left=Math.max(4,x)+'px';
+    tip.style.top=Math.max(4,y)+'px';
+    tip.classList.add('on');
+  }}
+  pins.forEach(function(p){{
+    p.addEventListener('pointerenter',function(e){{
+      if(e.pointerType==='touch'||drag) return;   // no hover on touch
+      clearTimeout(tipTimer);
+      tipTimer=setTimeout(function(){{tipShow(p,e);}},110);
+    }});
+    p.addEventListener('pointermove',function(e){{
+      if(tip.classList.contains('on')) tipShow(p,e);
+    }});
+    p.addEventListener('pointerleave',tipHide);
+  }});
+  svg.addEventListener('pointerdown',tipHide);
+
   // ---- zoom and pan ----------------------------------------------------
   var svg=$('map'), g=$('z'), VW={vieww}, VH={viewh};
   var k=1, tx=0, ty=0;
@@ -1161,7 +1205,6 @@ svg[data-k="4"] .rl{{display:inline}}
     var p=svgPoint(e);
     zoomAt(p[0],p[1],e.deltaY<0?1.18:1/1.18);
   }},{{passive:false}});
-  var drag=null;
   svg.addEventListener('pointerdown',function(e){{
     drag=svgPoint(e); svg.classList.add('drag'); svg.setPointerCapture(e.pointerId);
   }});
