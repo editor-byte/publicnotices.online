@@ -1158,7 +1158,12 @@ svg[data-k="4"] .rl{{display:inline}}
   }});
 
   // ---- hover preview ---------------------------------------------------
-  var drag=null;        // declared here because the hover code checks it
+  // svg, g and drag are declared here, before first use: the hover handler
+  // attaches a listener to svg straight away, and a reference to a
+  // not-yet-assigned var throws, which would abort everything below it
+  // including the filter buttons.
+  var svg=$('map'), g=$('z'), VW={vieww}, VH={viewh};
+  var drag=null;
   // One tooltip, following the pointer. Brief by design: the full detail
   // belongs in the panel, on click. A short delay stops it flickering as
   // the pointer sweeps across a cluster.
@@ -1193,7 +1198,6 @@ svg[data-k="4"] .rl{{display:inline}}
   svg.addEventListener('pointerdown',tipHide);
 
   // ---- zoom and pan ----------------------------------------------------
-  var svg=$('map'), g=$('z'), VW={vieww}, VH={viewh};
   var k=1, tx=0, ty=0;
   function apply(){{
     g.setAttribute('transform','translate('+tx+','+ty+') scale('+k+')');
