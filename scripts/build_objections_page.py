@@ -1196,10 +1196,10 @@ svg[data-k="4"] .rl{{display:inline}}
     mcard.querySelector('.x').addEventListener('click',hideCard);
   }}
   pins.forEach(function(p){{
-    var go=function(e){{e.stopPropagation();show(p.getAttribute('data-id'),p);}};
-    p.addEventListener('click',go);
     p.addEventListener('keydown',function(e){{
-      if(e.key==='Enter'||e.key===' '){{e.preventDefault();go(e);}}
+      if(e.key==='Enter'||e.key===' '){{
+        e.preventDefault(); show(p.getAttribute('data-id'),p);
+      }}
     }});
   }});
 
@@ -1242,9 +1242,19 @@ svg[data-k="4"] .rl{{display:inline}}
     }});
     p.addEventListener('pointerleave',tipHide);
   }});
+  var downAt=null, downPin=null;
   svg.addEventListener('pointerdown',function(e){{
     tipHide();
-    if(!e.target.closest('.pin')) hideCard();
+    downAt=[e.clientX,e.clientY];
+    downPin=e.target.closest ? e.target.closest('.pin') : null;
+  }});
+  svg.addEventListener('pointerup',function(e){{
+    if(!downAt) return;
+    var moved=Math.hypot(e.clientX-downAt[0],e.clientY-downAt[1]);
+    downAt=null;
+    if(moved>5) return;                      // that was a drag
+    if(downPin) show(downPin.getAttribute('data-id'),downPin);
+    else hideCard();
   }});
 
   // ---- zoom and pan ----------------------------------------------------
