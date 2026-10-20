@@ -162,8 +162,23 @@ def clearest_point(ring, obstacles, halfwidth=34.0, halfheight=11.0, step=7):
     return best, bestscore
 
 
-# Shortest a segment can be, in viewBox units, before a label is worth it.
-LABEL_MIN_LEN = {4: 18, 3: 20, 2: 24, 1: 30}
+# The zoom at which each class of road gets its name, matching the bands in
+# the page's JavaScript.
+REVEAL_K = {4: 1.8, 3: 1.8, 2: 2.6, 1: 3.6}
+LABEL_PX = 9.0          # rendered font size, in screen pixels
+CHAR_W = 0.55           # average glyph width in Lora, as a fraction of em
+
+
+def label_fits(name, pts, w):
+    """
+    textPath draws only the part of the text that fits along the path and
+    silently clips the rest, so a long name on a short road comes out as
+    "ghton Ro". Require the road to be comfortably longer than the label
+    will be at the zoom where it first appears.
+    """
+    k = REVEAL_K.get(w, 3.6)
+    text_units = CHAR_W * (LABEL_PX / k) * len(name)
+    return seg_len(pts) >= text_units * 1.15
 
 
 def seg_len(pts):
@@ -312,7 +327,7 @@ def main():
     # length rather than once per segment.
     seen, road_labels = set(), []
     for w, name, pts in sorted(named, key=lambda t: -seg_len(t[2])):
-        if seg_len(pts) < LABEL_MIN_LEN.get(w, 40):
+        if not label_fits(name, pts, w):
             continue
         cell = (name.lower(), int(pts[0][0] // 110), int(pts[0][1] // 110))
         if cell in seen:
@@ -323,7 +338,7 @@ def main():
         pid = f"r{len(road_labels)}"
         d = "M" + " L".join(f"{x},{y}" for x, y in pts)
         road_labels.append(
-            f'<path id="{pid}" class="rp" d="{d}"/>'
+            f'<path id="{pid}" class="rp" fill="none" stroke="none" d="{d}"/>'
             f'<text class="rl rl{w}" dy="-2.5">'
             f'<textPath href="#{pid}" startOffset="50%" text-anchor="middle">'
             f'{html.escape(name.title())}</textPath></text>')
