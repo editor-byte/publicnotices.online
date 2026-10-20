@@ -494,15 +494,16 @@ def main():
         lead = (f'<line class="lead" x1="{p["tx"]}" y1="{p["ty"]}" '
                 f'x2="{x}" y2="{y}"/>'
                 if math.dist((x, y), (p["tx"], p["ty"])) > 3 else "")
-        shape = (f'<circle r="11" fill="{p["c"]}"/>' if p["kind"] == "planning"
-                 else f'<rect x="-10" y="-10" width="20" height="20" rx="5" '
-                      f'fill="{p["c"]}"/>')
+        r = 11 if p["n"] > 1 else 8
+        shape = (f'<circle r="{r}" fill="{p["c"]}"/>' if p["kind"] == "planning"
+                 else f'<rect x="-{r-1}" y="-{r-1}" width="{2*(r-1)}" '
+                      f'height="{2*(r-1)}" rx="4" fill="{p["c"]}"/>')
+        count = f'<text y="4">{p["n"]}</text>' if p["n"] > 1 else ""
         pin_svg.append(
             f'{lead}<g class="pin {p["kind"]}" data-id="{p["id"]}" '
             f'data-close="{p["close"]}" data-x="{x}" data-y="{y}" '
             f'transform="translate({x},{y})" '
-            f'tabindex="0" role="button">{shape}'
-            f'<text y="4">{p["n"]}</text></g>')
+            f'tabindex="0" role="button">{shape}{count}</g>')
 
     nplan = sum(1 for r in plan if r["comment_deadline"] >= iso_today)
     ntraffic = sum(1 for fs in schemes.values()
@@ -669,7 +670,8 @@ svg[data-k="4"] .rl{{display:inline}}
 <h2>What you can object to in Hackney right now</h2>
 <p class="standfirst">Planning applications and road changes currently open for
  comment or objection, with the deadline for each. Tap a marker for what is
- proposed there. Round markers are buildings, square ones are roads.</p>
+ proposed there. Round markers are buildings, square ones are roads; a number
+ means more than one thing is happening at that spot.</p>
 
 <div class="bar">
   <label class="search">
@@ -963,7 +965,8 @@ svg[data-k="4"] .rl{{display:inline}}
     <h1>What you can object to in Hackney right now</h1>
     <p class="standfirst">Planning applications and road changes open for
      comment or objection, with the deadline for each. Click a marker. Round
-     markers are buildings, square ones are roads.</p>
+     markers are buildings, square ones are roads; a number means more than
+     one thing is happening at that spot.</p>
   </div>
 
   <label class="search">
