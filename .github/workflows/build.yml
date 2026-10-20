@@ -70,9 +70,6 @@ jobs:
           cp CNAME public/CNAME 2>/dev/null || true
           ls -la public
 
-          cp CNAME public/CNAME 2>/dev/null || true
-          ls -la public
-
       - name: Deploy to Cloudflare
         uses: cloudflare/wrangler-action@v3
         with:
@@ -80,7 +77,6 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Keep the data files for inspection
-      
         # Handy when a figure on the page looks wrong: the exact inputs for
         # every build are downloadable from the run for 14 days.
         uses: actions/upload-artifact@v4
