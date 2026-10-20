@@ -640,7 +640,13 @@ TEMPLATE = """<!--kg-card-begin: html-->
   stroke-width:3px;stroke-linejoin:round;pointer-events:none}}
 .hkob .ln{{fill:none;stroke-width:2.5;stroke-linecap:round;opacity:.45}}
 .hkob .lead{{stroke:#8d8880;stroke-width:.9}}
-.hkob svg[data-k="2"] .rl3,svg[data-k="2"] .rl4,
+.hkob /* Street labels: hidden until the reveal bands below switch them on. */
+.rp{{fill:none;stroke:none}}
+.rl{{font-family:Lora,Georgia,serif;fill:#6f6a52;font-size:9px;
+  paint-order:stroke;stroke:var(--land);stroke-width:2.6px;
+  stroke-linejoin:round;pointer-events:none;display:none}}
+.rl3,.rl4{{fill:#6a6450}}
+svg[data-k="2"] .rl3,svg[data-k="2"] .rl4,
 svg[data-k="3"] .rl2,svg[data-k="3"] .rl3,svg[data-k="3"] .rl4,
 svg[data-k="4"] .rl{{display:inline}}
 .pin{{cursor:pointer}}
@@ -965,6 +971,12 @@ ul.rows{{list-style:none;padding:0;margin:0}}
 .ln{{fill:none;stroke-width:2.5;stroke-linecap:round;opacity:.45;
   vector-effect:non-scaling-stroke}}
 .lead{{stroke:#8d8880;stroke-width:.9;vector-effect:non-scaling-stroke}}
+/* Street labels: hidden until the reveal bands below switch them on. */
+.rp{{fill:none;stroke:none}}
+.rl{{font-family:Lora,Georgia,serif;fill:#6f6a52;font-size:9px;
+  paint-order:stroke;stroke:var(--land);stroke-width:2.6px;
+  stroke-linejoin:round;pointer-events:none;display:none}}
+.rl3,.rl4{{fill:#6a6450}}
 svg[data-k="2"] .rl3,svg[data-k="2"] .rl4,
 svg[data-k="3"] .rl2,svg[data-k="3"] .rl3,svg[data-k="3"] .rl4,
 svg[data-k="4"] .rl{{display:inline}}
