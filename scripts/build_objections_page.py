@@ -644,10 +644,10 @@ TEMPLATE = """<!--kg-card-begin: html-->
 .hkob .lead{{stroke:#8d8880;stroke-width:.9}}
 .hkob /* Street labels: hidden until the reveal bands below switch them on. */
 .rp{{fill:none;stroke:none}}
-.rl{{font-family:Lora,Georgia,serif;fill:#28401f;font-size:9px;
+.rl{{font-family:Lora,Georgia,serif;fill:#5b5b57;font-size:9px;
   paint-order:stroke;stroke:var(--land);stroke-width:2.6px;
   stroke-linejoin:round;pointer-events:none;display:none}}
-.rl3,.rl4{{fill:#1d3016}}
+.rl3,.rl4{{fill:#3d352b}}
 svg[data-k="2"] .rl3,svg[data-k="2"] .rl4,
 svg[data-k="3"] .rl2,svg[data-k="3"] .rl3,svg[data-k="3"] .rl4,
 svg[data-k="4"] .rl{{display:inline}}
@@ -875,8 +875,9 @@ TEMPLATE_PAGE = """<!DOCTYPE html>
 *,*::before,*::after{{box-sizing:border-box}}
 :root{{
   --ink:#1a1a1a; --quiet:#5b5b57; --paper:#fafaf7; --chip:#eeece5;
-  --land:#7faf50; --wardline:#5f8e53; --edge:#417035; --rule:#d7d5cc;
-  --brand:#1a1a1a; --accent:#a8322a; --sea:#dfe6cf;
+  --land:#eae5da; --wardline:#cdc5b5; --edge:#8c8271; --rule:#d7d5cc;
+  --brand:#1a1a1a; --accent:#a8322a; --sea:#f6f2e9;
+  --tip:#f7f9e9;
   color-scheme:light;
   padding-top:env(safe-area-inset-top,0px);
 }}
@@ -953,18 +954,18 @@ ul.rows{{list-style:none;padding:0;margin:0}}
 .hide{{display:none}}
 .wards{{fill:var(--land);stroke:var(--wardline);stroke-width:.8;
   stroke-linejoin:round;vector-effect:non-scaling-stroke}}
-.outline{{fill:none;stroke:#c4503f;stroke-width:2.6;stroke-linejoin:round;
+.outline{{fill:none;stroke:var(--edge);stroke-width:2.5;stroke-linejoin:round;
   vector-effect:non-scaling-stroke}}
 .veil{{fill:var(--sea);opacity:.74;pointer-events:none}}
 .rdc,.rdf{{fill:none;stroke-linecap:round;stroke-linejoin:round}}
 /* casings */
-.rdc1{{stroke:#6c9358;stroke-width:1.5}}
-.rdc2{{stroke:#5f8e53;stroke-width:2.4}}
-.rdc3{{stroke:#4d7d42;stroke-width:3.4}}
-.rdc4{{stroke:#417035;stroke-width:4.4}}
+.rdc1{{stroke:#cdc5b5;stroke-width:1.5}}
+.rdc2{{stroke:#c0b6a2;stroke-width:2.4}}
+.rdc3{{stroke:#a79d8c;stroke-width:3.4}}
+.rdc4{{stroke:#8c8271;stroke-width:4.4}}
 /* fills */
-.rdf1{{stroke:#e9efdf;stroke-width:.85}}
-.rdf2{{stroke:#f2f5e8;stroke-width:1.5}}
+.rdf1{{stroke:#fafaf7;stroke-width:.85}}
+.rdf2{{stroke:#f7f4ec;stroke-width:1.5}}
 .rdf3{{stroke:#ffffff;stroke-width:2.2}}
 .rdf4{{stroke:#ffffff;stroke-width:3.0}}
 .wl{{font-size:11px;fill:#6f6a52;text-anchor:middle;
@@ -975,10 +976,10 @@ ul.rows{{list-style:none;padding:0;margin:0}}
 .lead{{stroke:#8d8880;stroke-width:.9;vector-effect:non-scaling-stroke}}
 /* Street labels: hidden until the reveal bands below switch them on. */
 .rp{{fill:none;stroke:none}}
-.rl{{font-family:Lora,Georgia,serif;fill:#28401f;font-size:9px;
+.rl{{font-family:Lora,Georgia,serif;fill:#5b5b57;font-size:9px;
   paint-order:stroke;stroke:var(--land);stroke-width:2.6px;
   stroke-linejoin:round;pointer-events:none;display:none}}
-.rl3,.rl4{{fill:#1d3016}}
+.rl3,.rl4{{fill:#3d352b}}
 svg[data-k="2"] .rl3,svg[data-k="2"] .rl4,
 svg[data-k="3"] .rl2,svg[data-k="3"] .rl3,svg[data-k="3"] .rl4,
 svg[data-k="4"] .rl{{display:inline}}
@@ -997,14 +998,19 @@ svg[data-k="4"] .rl{{display:inline}}
 .zoom button{{font:inherit;width:2.1rem;height:2.1rem;border-radius:8px;
   border:1px solid var(--rule);background:#fff;color:var(--ink);
   cursor:pointer;font-size:1rem;line-height:1}}
-.tip{{position:absolute;pointer-events:none;z-index:5;max-width:17rem;
-  background:var(--brand);color:#fafaf7;border-radius:9px;
-  padding:.5rem .7rem;font-size:.85rem;line-height:1.35;
-  box-shadow:0 4px 14px rgba(0,0,0,.25);opacity:0;transition:opacity .09s;
-  border-left:4px solid var(--accent)}}
+.tip{{position:absolute;pointer-events:none;z-index:5;max-width:18rem;
+  background:var(--tip);color:var(--ink);border-radius:11px;
+  padding:.7rem .9rem;font-size:.86rem;line-height:1.4;
+  border:1px solid rgba(26,26,26,.10);
+  box-shadow:0 10px 26px rgba(26,26,26,.22),0 2px 6px rgba(26,26,26,.10);
+  opacity:0;transition:opacity .09s}}
 .tip.on{{opacity:1}}
-.tip b{{display:block;font-size:.95rem}}
-.tip i{{font-style:normal;color:#bdbab2}}
+.tip b{{display:block;font-size:1rem;margin-bottom:.1rem}}
+.tip i{{font-style:normal;color:var(--quiet);font-size:.82rem}}
+.tip u{{display:block;text-decoration:none;margin-top:.35rem;
+  font-size:.82rem;color:var(--quiet)}}
+.tip s{{display:block;text-decoration:none;height:3px;width:2.2rem;
+  border-radius:2px;margin-bottom:.45rem}}
 .hint{{position:absolute;left:14px;bottom:14px;background:var(--paper);
   border-radius:999px;padding:.4rem .9rem;font-size:.82rem;color:var(--quiet);
   box-shadow:0 2px 8px rgba(0,0,0,.1)}}
@@ -1172,9 +1178,10 @@ svg[data-k="4"] .rl{{display:inline}}
   function tipShow(p,e){{
     var d=D[p.getAttribute('data-id')]; if(!d) return;
     var n=d.items.length;
-    tip.innerHTML='<b>'+d.title+'</b><i>'+d.sub+
-      (n>1?' · '+n+' item'+(n===1?'':'s'):'')+'</i><br>'+
-      (shut(d.close)?'Closed ':'Comment by ')+d.closeTxt;
+    tip.innerHTML='<s style="background:'+d.colour+'"></s>'+
+      '<b>'+d.title+'</b><i>'+d.sub+
+      (n>1?' · '+n+' item'+(n===1?'':'s'):'')+'</i>'+
+      '<u>'+(shut(d.close)?'Closed ':'Comment by ')+d.closeTxt+'</u>';
     var r=stage.getBoundingClientRect();
     var x=e.clientX-r.left+14, y=e.clientY-r.top+14;
     // Flip back inside the stage rather than overflowing it.
