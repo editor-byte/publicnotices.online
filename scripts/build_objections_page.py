@@ -840,17 +840,19 @@ TEMPLATE_PAGE = """<!DOCTYPE html>
   color-scheme:light;
   padding-top:env(safe-area-inset-top,0px);
 }}
-html,body{{height:100%;margin:0}}
+html,body{{height:100%;margin:0;overflow-x:hidden}}
 body{{font-family:Lora,Georgia,'Times New Roman',serif;color:var(--ink);
   background:var(--paper);line-height:1.5}}
 .masthead{{background:var(--brand);color:#f4f1e1;margin:-1.5rem -1.4rem 1.2rem;
   padding:1.3rem 1.4rem 1.1rem}}
 .masthead h1{{color:#f4f1e1;margin:0}}
 .masthead .standfirst{{color:#c9c7ae;margin:.3rem 0 0}}
-.shell{{display:flex;height:100%;align-items:stretch}}
-.panel{{flex:0 0 25rem;max-width:25rem;overflow-y:auto;padding:1.5rem 1.4rem 3rem;
-  border-right:1px solid var(--rule)}}
-.stage{{flex:1 1 auto;position:relative;background:var(--sea);overflow:hidden}}
+.shell{{display:flex;height:100%;align-items:stretch;
+  max-width:100%}}
+.panel{{flex:0 0 25rem;max-width:25rem;min-width:0;overflow-y:auto;
+  padding:1.5rem 1.4rem 3rem;border-right:1px solid var(--rule)}}
+.stage{{flex:1 1 auto;min-width:0;position:relative;
+  background:var(--sea);overflow:hidden}}
 .stage svg{{position:absolute;inset:0;width:100%;height:100%;touch-action:none;
   cursor:grab}}
 .stage svg.drag{{cursor:grabbing}}
@@ -890,8 +892,12 @@ h1{{font-size:1.6rem;line-height:1.15;margin:0 0 .25rem}}
 .sw.sq{{width:.7em;height:.7em}}
 h3{{font-size:1rem;margin:1.4rem 0 .4rem}}
 ul.rows{{list-style:none;padding:0;margin:0}}
-.row{{display:flex;gap:.5rem;align-items:baseline;padding:.45rem 0;
-  border-bottom:1px solid var(--rule);font-size:.9rem}}
+.row{{display:flex;flex-wrap:wrap;gap:.2rem .5rem;
+  align-items:baseline;padding:.5rem 0;min-width:0;
+  border-bottom:1px solid var(--rule);font-size:.9rem;
+  overflow-wrap:anywhere}}
+.row b{{flex:1 1 100%}}
+.row .sw{{flex:0 0 auto}}
 .row .sw{{margin-top:.4rem}}
 .dl{{color:var(--quiet);font-size:.88rem;white-space:nowrap}}
 .flag{{color:#8a5a2b;font-size:.88rem}}
@@ -938,10 +944,13 @@ svg[data-k="4"] .rl{{display:inline}}
 .hint{{position:absolute;left:14px;bottom:14px;background:var(--paper);
   border-radius:999px;padding:.4rem .9rem;font-size:.82rem;color:var(--quiet);
   box-shadow:0 2px 8px rgba(0,0,0,.1)}}
+@media (max-width:1100px){{
+  .panel{{flex:0 0 20rem;max-width:20rem}}
+}}
 @media (max-width:860px){{
   html,body{{height:auto}}
   .shell{{display:block}}
-  .panel{{max-width:none;flex:none;border-right:0;
+  .panel{{max-width:none;flex:none;width:100%;border-right:0;
     border-bottom:1px solid var(--rule)}}
   .stage{{height:70vh}}
 }}
