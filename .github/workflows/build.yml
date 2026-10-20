@@ -69,13 +69,18 @@ jobs:
           python3 scripts/build_objections_page.py $DATA --out public/card.html
           cp CNAME public/CNAME 2>/dev/null || true
           ls -la public
-       - name: Deploy to Cloudflare
+
+          cp CNAME public/CNAME 2>/dev/null || true
+          ls -la public
+
+      - name: Deploy to Cloudflare
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Keep the data files for inspection
+      
         # Handy when a figure on the page looks wrong: the exact inputs for
         # every build are downloadable from the run for 14 days.
         uses: actions/upload-artifact@v4
