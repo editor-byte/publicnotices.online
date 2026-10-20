@@ -42,18 +42,20 @@ W, H, PAD = 720, 760, 16
 MIN_DRAW = 9.0
 
 # Planning categories keep the colours readers already see in the roundups.
+# Taken from the Hackney Citizen's own planning and traffic cards, so the
+# portal reads as the same publication rather than a separate product.
 CAT_COLOUR = {
-    "Extensions and alterations": "#c08a2e",
-    "Listed building consent": "#9c3f2f",
-    "Signs and shopfronts": "#7a5080",
-    "New homes": "#2f6f7a",
-    "Change of use": "#d4682b",
-    "Major development": "#1f5136",
-    "Infrastructure": "#58605c",
-    "Opening hours": "#8a6d1f",
+    "Extensions and alterations": "#6f6353",
+    "Listed building consent": "#7d2436",
+    "Signs and shopfronts": "#6a4b8a",
+    "New homes": "#2a5a7a",
+    "Change of use": "#a2542a",
+    "Major development": "#2f6b45",
+    "Infrastructure": "#5f574b",
+    "Opening hours": "#b3801c",
 }
-CAT_FALLBACK = "#c08a2e"
-TRAFFIC_COLOUR = "#16304b"
+CAT_FALLBACK = "#6f6353"
+TRAFFIC_COLOUR = "#1f6f8b"
 
 # Sites with no postcode at all. Add a British National Grid easting and
 # northing to put one on the map; otherwise it is listed without a pin.
@@ -642,10 +644,10 @@ TEMPLATE = """<!--kg-card-begin: html-->
 .hkob .lead{{stroke:#8d8880;stroke-width:.9}}
 .hkob /* Street labels: hidden until the reveal bands below switch them on. */
 .rp{{fill:none;stroke:none}}
-.rl{{font-family:Lora,Georgia,serif;fill:#6f6a52;font-size:9px;
+.rl{{font-family:Lora,Georgia,serif;fill:#5b5b57;font-size:9px;
   paint-order:stroke;stroke:var(--land);stroke-width:2.6px;
   stroke-linejoin:round;pointer-events:none;display:none}}
-.rl3,.rl4{{fill:#6a6450}}
+.rl3,.rl4{{fill:#3d352b}}
 svg[data-k="2"] .rl3,svg[data-k="2"] .rl4,
 svg[data-k="3"] .rl2,svg[data-k="3"] .rl3,svg[data-k="3"] .rl4,
 svg[data-k="4"] .rl{{display:inline}}
@@ -872,19 +874,19 @@ TEMPLATE_PAGE = """<!DOCTYPE html>
 <style>
 *,*::before,*::after{{box-sizing:border-box}}
 :root{{
-  --ink:#1a1c1a; --quiet:#6b6a58; --paper:#f4f1e1; --chip:#e8e4cd;
-  --land:#ebe7d1; --wardline:#dad3b6; --edge:#9a9376; --rule:#ddd8bf;
-  --brand:#0d1b2a; --accent:#efc84a; --sea:#f7f5ea;
+  --ink:#1a1a1a; --quiet:#5b5b57; --paper:#fafaf7; --chip:#eeece5;
+  --land:#eae5da; --wardline:#cdc5b5; --edge:#8c8271; --rule:#d7d5cc;
+  --brand:#1a1a1a; --accent:#a8322a; --sea:#f6f2e9;
   color-scheme:light;
   padding-top:env(safe-area-inset-top,0px);
 }}
 html,body{{height:100%;margin:0;overflow-x:hidden}}
 body{{font-family:Lora,Georgia,'Times New Roman',serif;color:var(--ink);
   background:var(--paper);line-height:1.5}}
-.masthead{{background:var(--brand);color:#f4f1e1;margin:-1.5rem -1.4rem 1.2rem;
+.masthead{{background:var(--brand);color:#fafaf7;margin:-1.5rem -1.4rem 1.2rem;
   padding:1.3rem 1.4rem 1.1rem}}
-.masthead h1{{color:#f4f1e1;margin:0}}
-.masthead .standfirst{{color:#c9c7ae;margin:.3rem 0 0}}
+.masthead h1{{color:#fafaf7;margin:0}}
+.masthead .standfirst{{color:#bdbab2;margin:.3rem 0 0}}
 .shell{{display:flex;height:100%;align-items:stretch;
   max-width:100%}}
 .panel{{flex:0 0 25rem;max-width:25rem;min-width:0;overflow-y:auto;
@@ -897,7 +899,7 @@ body{{font-family:Lora,Georgia,'Times New Roman',serif;color:var(--ink);
 h1{{font-size:1.6rem;line-height:1.15;margin:0 0 .25rem}}
 .standfirst{{margin:0 0 1.1rem;color:var(--quiet);font-size:.97rem}}
 .search{{display:flex;align-items:center;gap:.5rem;border:1px solid var(--rule);
-  border-radius:999px;padding:.55rem 1rem;background:#fbfaf2;
+  border-radius:999px;padding:.55rem 1rem;background:#fff;
   margin-bottom:.7rem}}
 .search svg{{flex:0 0 auto;width:15px;height:15px}}
 .search input{{border:0;outline:0;font:inherit;font-size:.97rem;width:100%;
@@ -956,15 +958,15 @@ ul.rows{{list-style:none;padding:0;margin:0}}
 .veil{{fill:var(--sea);opacity:.74;pointer-events:none}}
 .rdc,.rdf{{fill:none;stroke-linecap:round;stroke-linejoin:round}}
 /* casings */
-.rdc1{{stroke:#c3bb9f;stroke-width:1.5}}
-.rdc2{{stroke:#bdae84;stroke-width:2.4}}
-.rdc3{{stroke:#b89a5e;stroke-width:3.4}}
-.rdc4{{stroke:#ab8a4c;stroke-width:4.4}}
+.rdc1{{stroke:#cdc5b5;stroke-width:1.5}}
+.rdc2{{stroke:#c0b6a2;stroke-width:2.4}}
+.rdc3{{stroke:#a79d8c;stroke-width:3.4}}
+.rdc4{{stroke:#8c8271;stroke-width:4.4}}
 /* fills */
-.rdf1{{stroke:#f8f5e9;stroke-width:.85}}
-.rdf2{{stroke:#f4ead0;stroke-width:1.5}}
-.rdf3{{stroke:#eed9a9;stroke-width:2.2}}
-.rdf4{{stroke:#e6c78d;stroke-width:3.0}}
+.rdf1{{stroke:#fafaf7;stroke-width:.85}}
+.rdf2{{stroke:#f7f4ec;stroke-width:1.5}}
+.rdf3{{stroke:#f3ede0;stroke-width:2.2}}
+.rdf4{{stroke:#efe6d4;stroke-width:3.0}}
 .wl{{font-size:11px;fill:#6f6a52;text-anchor:middle;
   font-family:Lora,Georgia,serif;paint-order:stroke;stroke:var(--land);
   stroke-width:3px;stroke-linejoin:round;pointer-events:none}}
@@ -973,17 +975,17 @@ ul.rows{{list-style:none;padding:0;margin:0}}
 .lead{{stroke:#8d8880;stroke-width:.9;vector-effect:non-scaling-stroke}}
 /* Street labels: hidden until the reveal bands below switch them on. */
 .rp{{fill:none;stroke:none}}
-.rl{{font-family:Lora,Georgia,serif;fill:#6f6a52;font-size:9px;
+.rl{{font-family:Lora,Georgia,serif;fill:#5b5b57;font-size:9px;
   paint-order:stroke;stroke:var(--land);stroke-width:2.6px;
   stroke-linejoin:round;pointer-events:none;display:none}}
-.rl3,.rl4{{fill:#6a6450}}
+.rl3,.rl4{{fill:#3d352b}}
 svg[data-k="2"] .rl3,svg[data-k="2"] .rl4,
 svg[data-k="3"] .rl2,svg[data-k="3"] .rl3,svg[data-k="3"] .rl4,
 svg[data-k="4"] .rl{{display:inline}}
 .pin{{cursor:pointer}}
-.pin circle,.pin rect{{stroke:#f7f5ea;stroke-width:2;
+.pin circle,.pin rect{{stroke:#fafaf7;stroke-width:2;
   vector-effect:non-scaling-stroke}}
-.pin text{{fill:#f7f5ea;font-size:11px;font-weight:600;text-anchor:middle;
+.pin text{{fill:#fafaf7;font-size:11px;font-weight:600;text-anchor:middle;
   font-family:Lora,Georgia,serif;pointer-events:none}}
 .pin:hover circle,.pin:hover rect{{stroke:var(--ink)}}
 .pin:focus{{outline:none}}
@@ -993,16 +995,16 @@ svg[data-k="4"] .rl{{display:inline}}
 .zoom{{position:absolute;right:14px;top:14px;display:flex;flex-direction:column;
   gap:.3rem}}
 .zoom button{{font:inherit;width:2.1rem;height:2.1rem;border-radius:8px;
-  border:1px solid var(--rule);background:#fbfaf2;color:var(--ink);
+  border:1px solid var(--rule);background:#fff;color:var(--ink);
   cursor:pointer;font-size:1rem;line-height:1}}
 .tip{{position:absolute;pointer-events:none;z-index:5;max-width:17rem;
-  background:var(--brand);color:#f4f1e1;border-radius:9px;
+  background:var(--brand);color:#fafaf7;border-radius:9px;
   padding:.5rem .7rem;font-size:.85rem;line-height:1.35;
   box-shadow:0 4px 14px rgba(0,0,0,.25);opacity:0;transition:opacity .09s;
   border-left:4px solid var(--accent)}}
 .tip.on{{opacity:1}}
 .tip b{{display:block;font-size:.95rem}}
-.tip i{{font-style:normal;color:#c9c7ae}}
+.tip i{{font-style:normal;color:#bdbab2}}
 .hint{{position:absolute;left:14px;bottom:14px;background:var(--paper);
   border-radius:999px;padding:.4rem .9rem;font-size:.82rem;color:var(--quiet);
   box-shadow:0 2px 8px rgba(0,0,0,.1)}}
