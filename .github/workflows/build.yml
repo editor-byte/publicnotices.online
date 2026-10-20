@@ -74,7 +74,7 @@ jobs:
         uses: cloudflare/wrangler-action@v3
         with:
           wranglerVersion: "4.151.3"
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          apiToken: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Keep the data files for inspection
