@@ -294,8 +294,17 @@ def main():
         byw[r["w"]].append("M" + " L".join(f"{x},{y}" for x, y in pts))
         if r.get("n"):
             named.append((r["w"], r["n"], pts))
-    road_svg = "".join(f'<path class="rd rd{w}" vector-effect="non-scaling-stroke" d="{" ".join(byw[w])}"/>'
-                       for w in sorted(byw))
+    # Each road is drawn twice: a darker casing, then a lighter fill on top,
+    # which is what gives a road an edge rather than looking like a line on
+    # a diagram. All casings go down first so junctions knit together
+    # instead of showing seams, and heavier roads are drawn last so they sit
+    # above the back streets.
+    road_svg = "".join(
+        f'<path class="rdc rdc{w}" vector-effect="non-scaling-stroke" '
+        f'd="{" ".join(byw[w])}"/>' for w in sorted(byw))
+    road_svg += "".join(
+        f'<path class="rdf rdf{w}" vector-effect="non-scaling-stroke" '
+        f'd="{" ".join(byw[w])}"/>' for w in sorted(byw))
 
     # Street labels, set along the road itself with textPath and revealed as
     # the reader zooms: main roads first, residential streets last. One per
@@ -602,11 +611,15 @@ TEMPLATE = """<!--kg-card-begin: html-->
 .hkob .outline{{fill:none;stroke:var(--edge);stroke-width:2.5;
   stroke-linejoin:round}}
 .hkob .veil{{fill:#f7f6f3;opacity:.74;pointer-events:none}}
-.hkob .rd{{fill:none;stroke:#cfc9bb;stroke-linecap:round;stroke-linejoin:round}}
-.hkob .rd1{{stroke-width:.55}}
-.hkob .rd2{{stroke-width:1.1;stroke:#c6bfae}}
-.hkob .rd3{{stroke-width:1.7;stroke:#bdb5a1}}
-.hkob .rd4{{stroke-width:2.4;stroke:#b3aa94}}
+.hkob .rdc,.hkob .rdf{{fill:none;stroke-linecap:round;stroke-linejoin:round}}
+.hkob .rdc1{{stroke:#c3bb9f;stroke-width:1.5}}
+.hkob .rdc2{{stroke:#bdae84;stroke-width:2.4}}
+.hkob .rdc3{{stroke:#b89a5e;stroke-width:3.4}}
+.hkob .rdc4{{stroke:#ab8a4c;stroke-width:4.4}}
+.hkob .rdf1{{stroke:#f8f5e9;stroke-width:.85}}
+.hkob .rdf2{{stroke:#f4ead0;stroke-width:1.5}}
+.hkob .rdf3{{stroke:#eed9a9;stroke-width:2.2}}
+.hkob .rdf4{{stroke:#e6c78d;stroke-width:3.0}}
 .hkob .wl{{font-size:11px;fill:#6f6a52;text-anchor:middle;
   font-family:Lora,Georgia,serif;paint-order:stroke;stroke:var(--land);
   stroke-width:3px;stroke-linejoin:round;pointer-events:none}}
@@ -918,9 +931,17 @@ ul.rows{{list-style:none;padding:0;margin:0}}
 .outline{{fill:none;stroke:var(--edge);stroke-width:2.5;stroke-linejoin:round;
   vector-effect:non-scaling-stroke}}
 .veil{{fill:var(--sea);opacity:.74;pointer-events:none}}
-.rd{{fill:none;stroke:#d5cdae;stroke-linecap:round;stroke-linejoin:round}}
-.rd1{{stroke-width:.55}} .rd2{{stroke-width:1.1;stroke:#cbc29f}}
-.rd3{{stroke-width:1.7;stroke:#bfb48c}} .rd4{{stroke-width:2.4;stroke:#b0a478}}
+.rdc,.rdf{{fill:none;stroke-linecap:round;stroke-linejoin:round}}
+/* casings */
+.rdc1{{stroke:#c3bb9f;stroke-width:1.5}}
+.rdc2{{stroke:#bdae84;stroke-width:2.4}}
+.rdc3{{stroke:#b89a5e;stroke-width:3.4}}
+.rdc4{{stroke:#ab8a4c;stroke-width:4.4}}
+/* fills */
+.rdf1{{stroke:#f8f5e9;stroke-width:.85}}
+.rdf2{{stroke:#f4ead0;stroke-width:1.5}}
+.rdf3{{stroke:#eed9a9;stroke-width:2.2}}
+.rdf4{{stroke:#e6c78d;stroke-width:3.0}}
 .wl{{font-size:11px;fill:#6f6a52;text-anchor:middle;
   font-family:Lora,Georgia,serif;paint-order:stroke;stroke:var(--land);
   stroke-width:3px;stroke-linejoin:round;pointer-events:none}}
