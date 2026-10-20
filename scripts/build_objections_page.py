@@ -647,8 +647,10 @@ svg[data-k="4"] .rl{{display:inline}}
 .hkob .pin circle,.hkob .pin rect{{stroke:#fff;stroke-width:2}}
 .hkob .pin text{{fill:#fff;font-size:11px;font-weight:600;text-anchor:middle;
   font-family:Lora,Georgia,serif;pointer-events:none}}
-.hkob .pin:hover circle,.hkob .pin:focus circle,
-.hkob .pin:hover rect,.hkob .pin:focus rect{{stroke:var(--ink)}}
+.hkob .pin:hover circle,.hkob .pin:hover rect{{stroke:var(--ink)}}
+.hkob .pin:focus{{outline:none}}
+.hkob .pin:focus-visible circle,.hkob .pin:focus-visible rect{{
+  stroke:var(--brand);stroke-width:3.5}}
 .hkob .card{{position:absolute;left:14px;bottom:14px;width:min(24em,74%);
   background:var(--paper);border-radius:12px;padding:.9em 1em;
   box-shadow:0 6px 22px rgba(0,0,0,.16);font-size:.95em;
@@ -971,8 +973,10 @@ svg[data-k="4"] .rl{{display:inline}}
   vector-effect:non-scaling-stroke}}
 .pin text{{fill:#f7f5ea;font-size:11px;font-weight:600;text-anchor:middle;
   font-family:Lora,Georgia,serif;pointer-events:none}}
-.pin:hover circle,.pin:focus circle,.pin:hover rect,.pin:focus rect{{
-  stroke:var(--ink)}}
+.pin:hover circle,.pin:hover rect{{stroke:var(--ink)}}
+.pin:focus{{outline:none}}
+.pin:focus-visible circle,.pin:focus-visible rect{{
+  stroke:var(--accent);stroke-width:3.5}}
 .pin.on circle,.pin.on rect{{stroke:var(--ink);stroke-width:3}}
 .zoom{{position:absolute;right:14px;top:14px;display:flex;flex-direction:column;
   gap:.3rem}}
