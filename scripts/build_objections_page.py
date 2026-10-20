@@ -162,6 +162,14 @@ def clearest_point(ring, obstacles, halfwidth=34.0, halfheight=11.0, step=7):
     return best, bestscore
 
 
+# Shortest a segment can be, in viewBox units, before a label is worth it.
+LABEL_MIN_LEN = {4: 18, 3: 20, 2: 24, 1: 30}
+
+
+def seg_len(pts):
+    return sum(math.dist(pts[i], pts[i+1]) for i in range(len(pts)-1))
+
+
 def lengthen(pts, minlen):
     total = sum(math.dist(pts[i], pts[i+1]) for i in range(len(pts)-1))
     if total >= minlen:
@@ -278,12 +286,42 @@ def main():
             ward_d.append("M" + " L".join(f"{x},{y}" for x, y in pts) + " Z")
 
     byw = collections.defaultdict(list)
+    named = []
     for r in roads:
         pts = [proj(x, y) for x, y in r["p"]]
-        if len(pts) >= 2:
-            byw[r["w"]].append("M" + " L".join(f"{x},{y}" for x, y in pts))
+        if len(pts) < 2:
+            continue
+        byw[r["w"]].append("M" + " L".join(f"{x},{y}" for x, y in pts))
+        if r.get("n"):
+            named.append((r["w"], r["n"], pts))
     road_svg = "".join(f'<path class="rd rd{w}" vector-effect="non-scaling-stroke" d="{" ".join(byw[w])}"/>'
                        for w in sorted(byw))
+
+    # Street labels, set along the road itself with textPath and revealed as
+    # the reader zooms: main roads first, residential streets last. One per
+    # name per grid cell, so a long road gets labelled a few times along its
+    # length rather than once per segment.
+    seen, road_labels = set(), []
+    for w, name, pts in sorted(named, key=lambda t: -seg_len(t[2])):
+        if seg_len(pts) < LABEL_MIN_LEN.get(w, 40):
+            continue
+        cell = (name.lower(), int(pts[0][0] // 110), int(pts[0][1] // 110))
+        if cell in seen:
+            continue
+        seen.add(cell)
+        if pts[-1][0] < pts[0][0]:      # keep text the right way up
+            pts = pts[::-1]
+        pid = f"r{len(road_labels)}"
+        d = "M" + " L".join(f"{x},{y}" for x, y in pts)
+        road_labels.append(
+            f'<path id="{pid}" class="rp" d="{d}"/>'
+            f'<text class="rl rl{w}" dy="-2.5">'
+            f'<textPath href="#{pid}" startOffset="50%" text-anchor="middle">'
+            f'{html.escape(name.title())}</textPath></text>')
+    road_label_svg = "".join(road_labels)
+    if roads:
+        print(f"{len(road_labels)} street labels from {len(named)} "
+              f"named segments ({len(roads)} segments total)")
 
     pins, detail, pid = [], {}, 0
     plan_sections, traffic_sections = [], []
@@ -500,6 +538,7 @@ def main():
                            else "objections-card.html")
     card = tmpl.format(
         vieww=W, viewh=H, wardpath=" ".join(ward_d), roads=road_svg,
+        roadlabels=road_label_svg,
         wardlabels="\n".join(labels), lines="\n".join(lines),
         pins="\n".join(pin_svg), legend=legend,
         planning="\n".join(plan_sections),
@@ -572,7 +611,10 @@ TEMPLATE = """<!--kg-card-begin: html-->
   stroke-width:3px;stroke-linejoin:round;pointer-events:none}}
 .hkob .ln{{fill:none;stroke-width:2.5;stroke-linecap:round;opacity:.45}}
 .hkob .lead{{stroke:#8d8880;stroke-width:.9}}
-.hkob .pin{{cursor:pointer}}
+.hkob svg[data-k="2"] .rl3,svg[data-k="2"] .rl4,
+svg[data-k="3"] .rl2,svg[data-k="3"] .rl3,svg[data-k="3"] .rl4,
+svg[data-k="4"] .rl{{display:inline}}
+.pin{{cursor:pointer}}
 .hkob .pin circle,.hkob .pin rect{{stroke:#fff;stroke-width:2}}
 .hkob .pin text{{fill:#fff;font-size:11px;font-weight:600;text-anchor:middle;
   font-family:Lora,Georgia,serif;pointer-events:none}}
@@ -656,6 +698,7 @@ TEMPLATE = """<!--kg-card-begin: html-->
       <path class="outline" d="{wardpath}"/>
       <path class="wards" d="{wardpath}"/>
 {roads}
+{roadlabels}
       <path class="veil" fill-rule="evenodd"
             d="M0,0 H{vieww} V{viewh} H0 Z {wardpath}"/>
       <path class="outline" d="{wardpath}"/>
@@ -876,6 +919,9 @@ ul.rows{{list-style:none;padding:0;margin:0}}
 .ln{{fill:none;stroke-width:2.5;stroke-linecap:round;opacity:.45;
   vector-effect:non-scaling-stroke}}
 .lead{{stroke:#8d8880;stroke-width:.9;vector-effect:non-scaling-stroke}}
+svg[data-k="2"] .rl3,svg[data-k="2"] .rl4,
+svg[data-k="3"] .rl2,svg[data-k="3"] .rl3,svg[data-k="3"] .rl4,
+svg[data-k="4"] .rl{{display:inline}}
 .pin{{cursor:pointer}}
 .pin circle,.pin rect{{stroke:#f7f5ea;stroke-width:2;
   vector-effect:non-scaling-stroke}}
@@ -960,6 +1006,7 @@ ul.rows{{list-style:none;padding:0;margin:0}}
       <path class="outline" d="{wardpath}"/>
       <path class="wards" d="{wardpath}"/>
 {roads}
+{roadlabels}
       <path class="veil" fill-rule="evenodd"
             d="M0,0 H{vieww} V{viewh} H0 Z {wardpath}"/>
       <path class="outline" d="{wardpath}"/>
@@ -1050,6 +1097,14 @@ ul.rows{{list-style:none;padding:0;margin:0}}
     document.querySelectorAll('.wl').forEach(function(t){{
       t.style.fontSize=(11*inv)+'px';
       t.style.strokeWidth=(3*inv)+'px';
+    }});
+    // Street names appear in bands: main roads from 1.8x, B-roads from 2.6x,
+    // everything from 3.6x. Below that the borough is too small to read them.
+    var band = k>=3.6?'4':k>=2.6?'3':k>=1.8?'2':'1';
+    svg.setAttribute('data-k',band);
+    document.querySelectorAll('.rl').forEach(function(t){{
+      t.style.fontSize=(9*inv)+'px';
+      t.style.strokeWidth=(2.6*inv)+'px';
     }});
   }}
   function clamp(){{
