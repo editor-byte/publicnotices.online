@@ -644,10 +644,10 @@ TEMPLATE = """<!--kg-card-begin: html-->
 .hkob .lead{{stroke:#8d8880;stroke-width:.9}}
 .hkob /* Street labels: hidden until the reveal bands below switch them on. */
 .rp{{fill:none;stroke:none}}
-.rl{{font-family:Lora,Georgia,serif;fill:#5b5b57;font-size:9px;
+.rl{{font-family:Lora,Georgia,serif;fill:#28401f;font-size:9px;
   paint-order:stroke;stroke:var(--land);stroke-width:2.6px;
   stroke-linejoin:round;pointer-events:none;display:none}}
-.rl3,.rl4{{fill:#3d352b}}
+.rl3,.rl4{{fill:#1d3016}}
 svg[data-k="2"] .rl3,svg[data-k="2"] .rl4,
 svg[data-k="3"] .rl2,svg[data-k="3"] .rl3,svg[data-k="3"] .rl4,
 svg[data-k="4"] .rl{{display:inline}}
@@ -875,8 +875,8 @@ TEMPLATE_PAGE = """<!DOCTYPE html>
 *,*::before,*::after{{box-sizing:border-box}}
 :root{{
   --ink:#1a1a1a; --quiet:#5b5b57; --paper:#fafaf7; --chip:#eeece5;
-  --land:#eae5da; --wardline:#cdc5b5; --edge:#8c8271; --rule:#d7d5cc;
-  --brand:#1a1a1a; --accent:#a8322a; --sea:#f6f2e9;
+  --land:#7faf50; --wardline:#5f8e53; --edge:#417035; --rule:#d7d5cc;
+  --brand:#1a1a1a; --accent:#a8322a; --sea:#dfe6cf;
   color-scheme:light;
   padding-top:env(safe-area-inset-top,0px);
 }}
@@ -953,20 +953,20 @@ ul.rows{{list-style:none;padding:0;margin:0}}
 .hide{{display:none}}
 .wards{{fill:var(--land);stroke:var(--wardline);stroke-width:.8;
   stroke-linejoin:round;vector-effect:non-scaling-stroke}}
-.outline{{fill:none;stroke:var(--edge);stroke-width:2.5;stroke-linejoin:round;
+.outline{{fill:none;stroke:#c4503f;stroke-width:2.6;stroke-linejoin:round;
   vector-effect:non-scaling-stroke}}
 .veil{{fill:var(--sea);opacity:.74;pointer-events:none}}
 .rdc,.rdf{{fill:none;stroke-linecap:round;stroke-linejoin:round}}
 /* casings */
-.rdc1{{stroke:#cdc5b5;stroke-width:1.5}}
-.rdc2{{stroke:#c0b6a2;stroke-width:2.4}}
-.rdc3{{stroke:#a79d8c;stroke-width:3.4}}
-.rdc4{{stroke:#8c8271;stroke-width:4.4}}
+.rdc1{{stroke:#6c9358;stroke-width:1.5}}
+.rdc2{{stroke:#5f8e53;stroke-width:2.4}}
+.rdc3{{stroke:#4d7d42;stroke-width:3.4}}
+.rdc4{{stroke:#417035;stroke-width:4.4}}
 /* fills */
-.rdf1{{stroke:#fafaf7;stroke-width:.85}}
-.rdf2{{stroke:#f7f4ec;stroke-width:1.5}}
-.rdf3{{stroke:#f3ede0;stroke-width:2.2}}
-.rdf4{{stroke:#efe6d4;stroke-width:3.0}}
+.rdf1{{stroke:#e9efdf;stroke-width:.85}}
+.rdf2{{stroke:#f2f5e8;stroke-width:1.5}}
+.rdf3{{stroke:#ffffff;stroke-width:2.2}}
+.rdf4{{stroke:#ffffff;stroke-width:3.0}}
 .wl{{font-size:11px;fill:#6f6a52;text-anchor:middle;
   font-family:Lora,Georgia,serif;paint-order:stroke;stroke:var(--land);
   stroke-width:3px;stroke-linejoin:round;pointer-events:none}}
@@ -975,10 +975,10 @@ ul.rows{{list-style:none;padding:0;margin:0}}
 .lead{{stroke:#8d8880;stroke-width:.9;vector-effect:non-scaling-stroke}}
 /* Street labels: hidden until the reveal bands below switch them on. */
 .rp{{fill:none;stroke:none}}
-.rl{{font-family:Lora,Georgia,serif;fill:#5b5b57;font-size:9px;
+.rl{{font-family:Lora,Georgia,serif;fill:#28401f;font-size:9px;
   paint-order:stroke;stroke:var(--land);stroke-width:2.6px;
   stroke-linejoin:round;pointer-events:none;display:none}}
-.rl3,.rl4{{fill:#3d352b}}
+.rl3,.rl4{{fill:#1d3016}}
 svg[data-k="2"] .rl3,svg[data-k="2"] .rl4,
 svg[data-k="3"] .rl2,svg[data-k="3"] .rl3,svg[data-k="3"] .rl4,
 svg[data-k="4"] .rl{{display:inline}}
