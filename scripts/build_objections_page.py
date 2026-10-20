@@ -59,6 +59,18 @@ TRAFFIC_COLOUR = "#3a3630"   # charcoal
 
 # Sites with no postcode at all. Add a British National Grid easting and
 # northing to put one on the map; otherwise it is listed without a pin.
+# The Citizen's own roundup for each notice, so a reader can get the full
+# write-up rather than only the council's register entry. One line per
+# fortnight. Until there are per-notice pages on the portal itself, this is
+# the "more information" link.
+ROUNDUP = {
+    "2026-09-17": "https://hackneycitizen.co.uk/2026/09/19/planning-applications-near-you/",
+    "2026-10-01": "https://hackneycitizen.co.uk/2026/10/05/planning-applications-near-you-051026/",
+    "2026-10-15": "https://hackneycitizen.co.uk/2026/10/17/planning-applications-near-you-171026/",
+}
+TRAFFIC_ROUNDUP = "https://hackneycitizen.co.uk/2026/10/17/road-changes-near-you-171026/"
+TRAFFWEB = "https://hackney.traffweb.app/traffweb/2/PublicConsultation"
+
 MANUAL_PLACE = {
     # "2026/1916": (533250, 187450),   # Woodberry Down Phase 5
 }
@@ -393,6 +405,8 @@ def main():
             "sub": f"{len(live)} planning application"
                    f"{'s' if len(live) != 1 else ''}",
             "approx": grp["how"] != "exact",
+            "more": ROUNDUP.get(live[0]["notice_date"], ""),
+            "moreTxt": "Read the Hackney Citizen's write-up",
             "close": deadline, "closeTxt": fmt(deadline), "colour": colour,
             "items": [{
                 "head": f"{r['reference']} · {r['address']}",
@@ -471,6 +485,8 @@ def main():
                 detail[pid] = {
                     "kind": "traffic", "title": st, "sub": ref,
                     "approx": False, "close": close, "closeTxt": fmt(close),
+                    "more": TRAFFWEB,
+                    "moreTxt": "See this scheme on the council's site",
                     "colour": TRAFFIC_COLOUR,
                     "items": [{"head": "", "body": w, "url": "", "note": ""}
                               for w in rec["what"]],
@@ -998,6 +1014,25 @@ svg[data-k="4"] .rl{{display:inline}}
 .zoom button{{font:inherit;width:2.1rem;height:2.1rem;border-radius:8px;
   border:1px solid var(--rule);background:#fff;color:var(--ink);
   cursor:pointer;font-size:1rem;line-height:1}}
+.mcard{{position:absolute;left:16px;bottom:16px;width:min(24rem,64%);
+  background:var(--paper);border-radius:12px;padding:1rem 1.1rem;
+  box-shadow:0 12px 30px rgba(26,26,26,.26),0 2px 6px rgba(26,26,26,.12);
+  font-size:.9rem;max-height:62%;overflow:auto;z-index:6;
+  border-left:5px solid var(--rule)}}
+.mcard .tag{{display:inline-block;font-size:.68rem;letter-spacing:.07em;
+  text-transform:uppercase;background:var(--chip);border-radius:5px;
+  padding:.25rem .6rem;margin-bottom:.5rem}}
+.mcard h2{{font-size:1.15rem;margin:0 0 .15rem}}
+.mcard .sub{{margin:0 0 .6rem;color:var(--quiet);font-size:.85rem}}
+.mcard .it{{border-top:1px solid var(--rule);padding-top:.5rem;margin-top:.5rem}}
+.mcard .it b{{display:block;font-size:.9rem;margin-bottom:.1rem}}
+.mcard .it span{{font-size:.86rem;color:var(--quiet)}}
+.mcard .close{{margin-top:.7rem;font-size:.9rem;font-weight:600}}
+.mcard .more{{display:inline-block;margin-top:.5rem;font-size:.86rem;
+  color:var(--accent)}}
+.mcard .x{{position:absolute;right:.5rem;top:.4rem;border:0;background:none;
+  font:inherit;font-size:1.2rem;line-height:1;color:var(--quiet);
+  cursor:pointer;padding:.2rem .4rem}}
 .tip{{position:absolute;pointer-events:none;z-index:5;max-width:18rem;
   background:var(--tip);color:var(--ink);border-radius:11px;
   padding:.7rem .9rem;font-size:.86rem;line-height:1.4;
@@ -1053,7 +1088,6 @@ svg[data-k="4"] .rl{{display:inline}}
   <p class="count"><b id="n-plan">{nplan} planning applications</b>
    <span id="n-road">and {ntraffic} road schemes</span> open now</p>
 
-  <div class="sel hide" id="sel" aria-live="polite"></div>
   <ul class="legend">{legend}</ul>
 
   <h3>Planning applications</h3>
@@ -1100,6 +1134,7 @@ svg[data-k="4"] .rl{{display:inline}}
     <button id="zout" aria-label="Zoom out">−</button>
     <button id="zreset" aria-label="Reset the view">⤾</button>
   </div>
+  <div class="mcard hide" id="mcard" aria-live="polite"></div>
   <div class="tip" id="tip" role="status"></div>
   <div class="hint" id="hint">Scroll to zoom · drag to pan</div>
 </main>
@@ -1135,25 +1170,30 @@ svg[data-k="4"] .rl{{display:inline}}
   $('n-road').textContent='and '+nt+(nt===1?' road scheme':' road schemes');
 
   // ---- selection -------------------------------------------------------
-  var sel=$('sel');
+  var mcard=$('mcard');
+  function hideCard(){{ mcard.classList.add('hide'); }}
   function show(id,el){{
     var d=D[id]; if(!d) return;
     pins.forEach(function(p){{p.classList.remove('on');}});
     if(el) el.classList.add('on');
     var closed=shut(d.close);
     var items=d.items.map(function(it){{
-      var h=it.head?'<b>'+(it.url?'<a href="'+it.url+'" rel="noopener">'+it.head+'</a>':it.head)+'</b>':'';
+      var h=it.head?'<b>'+(it.url?'<a href="'+it.url+'" rel="noopener" target="_blank">'+it.head+'</a>':it.head)+'</b>':'';
       return '<div class="it">'+h+'<span>'+it.body+
         (it.note?' <i>'+it.note+'</i>':'')+'</span></div>';
     }}).join('');
-    sel.innerHTML='<span class="tag">'+
+    var more=d.more?'<a class="more" href="'+d.more+'" rel="noopener" '+
+      'target="_blank">'+d.moreTxt+' &rarr;</a>':'';
+    mcard.innerHTML='<button class="x" aria-label="Close">&times;</button>'+
+      '<span class="tag">'+
       (closed?'Closed':(d.kind==='planning'?'Planning':'Road change'))+
       '</span><h2>'+d.title+'</h2><p class="sub">'+d.sub+
       (d.approx?' · position approximate':'')+'</p>'+items+
-      '<p class="close">'+(closed?'Closed ':'Comment by ')+d.closeTxt+'</p>';
-    sel.style.borderLeftColor=d.colour;
-    sel.classList.remove('hide');
-    sel.scrollIntoView({{block:'nearest'}});
+      '<p class="close">'+(closed?'Closed ':'Comment by ')+d.closeTxt+'</p>'+
+      more;
+    mcard.style.borderLeftColor=d.colour;
+    mcard.classList.remove('hide');
+    mcard.querySelector('.x').addEventListener('click',hideCard);
   }}
   pins.forEach(function(p){{
     var go=function(e){{e.stopPropagation();show(p.getAttribute('data-id'),p);}};
@@ -1202,7 +1242,10 @@ svg[data-k="4"] .rl{{display:inline}}
     }});
     p.addEventListener('pointerleave',tipHide);
   }});
-  svg.addEventListener('pointerdown',tipHide);
+  svg.addEventListener('pointerdown',function(e){{
+    tipHide();
+    if(!e.target.closest('.pin')) hideCard();
+  }});
 
   // ---- zoom and pan ----------------------------------------------------
   var k=1, tx=0, ty=0;
