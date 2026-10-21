@@ -495,8 +495,6 @@ def main():
             "sub": f"{len(live)} planning application"
                    f"{'s' if len(live) != 1 else ''}",
             "approx": grp["how"] != "exact",
-            "more": ROUNDUP.get(live[0]["notice_date"], ""),
-            "moreTxt": "Read the Hackney Citizen's write-up",
             "close": deadline, "closeTxt": fmt(deadline), "colour": colour,
             "items": [{
                 "head": f"{r['reference']} · {r['address']}",
