@@ -944,17 +944,19 @@ svg[data-k="4"] .rl{{display:inline}}
   {unplaced}
 </div>
 
-<p class="foot">Planning applications advertised by Hackney Council and
- reported in the Hackney Citizen; the deadline is 21 days from the date of the
- notice, which is the only published date by which a comment must be made —
- the council’s own register shows when it intends to decide, not when you can
- object. Road changes from the council’s published traffic order data,
- retrieved {generated}. Boundaries: GLA and ONS London ward boundaries. Roads
- and postcode positions: OS Open Roads and OS Code-Point Open, © Crown
- copyright and database right, Open Government Licence v3. Markers sit at the
- postcode, not the building, and are nudged apart where they would overlap,
- with a hairline back to the true position. Deadlines are checked against your
- device’s clock each time this page loads.</p>
+<p class="foot">Planning applications from Hackney Council’s
+ weekly consultation lists. Those lists carry no date by which a comment
+ must be made; where one is shown here it comes from the printed statutory
+ notice, 21 days from the date of that notice. The council’s own register
+ shows when it intends to decide, not when you can object. Road changes
+ from the council’s published traffic order data, retrieved {generated}.
+ Boundaries: GLA and ONS London ward boundaries. Roads and postcode
+ positions: OS Open Roads and OS Code-Point Open, &copy; Crown copyright
+ and database right, Open Government Licence v3. Markers sit at the
+ postcode, not the building, and are nudged apart where they would
+ overlap; a few sit at the centre of their ward because the council’s list
+ gives no postcode for them. Deadlines are checked against your
+ device’s clock.</p>
 </div>
 <script>
 (function(){{
@@ -1284,17 +1286,19 @@ svg[data-k="4"] .rl{{display:inline}}
 
   <p class="currency">{currency}</p>
 
-  <p class="foot">Planning applications advertised by Hackney Council and
-   reported in the Hackney Citizen; the deadline is 21 days from the date of
-   the notice, which is the only published date by which a comment must be
-   made — the council’s own register shows when it intends to decide, not when
-   you can object. Road changes from the council’s published traffic order
-   data, retrieved {generated}. Boundaries: GLA and ONS London ward
-   boundaries. Roads and postcode positions: OS Open Roads and OS Code-Point
-   Open, © Crown copyright and database right, Open Government Licence v3.
-   Markers sit at the postcode, not the building, and are nudged apart where
-   they would overlap, with a hairline back to the true position. Deadlines
-   are checked against your device’s clock.</p>
+  <p class="foot">Planning applications from Hackney Council’s
+   weekly consultation lists. Those lists carry no date by which a comment
+   must be made; where one is shown here it comes from the printed statutory
+   notice, 21 days from the date of that notice. The council’s own register
+   shows when it intends to decide, not when you can object. Road changes
+   from the council’s published traffic order data, retrieved {generated}.
+   Boundaries: GLA and ONS London ward boundaries. Roads and postcode
+   positions: OS Open Roads and OS Code-Point Open, &copy; Crown copyright
+   and database right, Open Government Licence v3. Markers sit at the
+   postcode, not the building, and are nudged apart where they would
+   overlap; a few sit at the centre of their ward because the council’s list
+   gives no postcode for them. Deadlines are checked against your
+   device’s clock.</p>
 </aside>
 
 <main class="stage">
