@@ -55,7 +55,18 @@ CAT_COLOUR = {
     "Infrastructure": "#928a79",               # stone
 }
 CAT_FALLBACK = "#6f6353"
-TRAFFIC_COLOUR = "#3a3630"   # charcoal
+# Road scheme colours, as the Hackney Citizen's traffic card uses them.
+TRAFFIC_COLOUR = {
+    "parking": "#8a5a2b",   # permit and pay bays
+    "hangar": "#1f6f8b",    # cycle hangars and stands
+    "hire": "#2f6b45",      # cycle hire bays
+    "ev": "#6b3f8f",        # charging points
+    "scheme": "#a8322a",    # street layout and everything else
+}
+TRAFFIC_LABEL = {
+    "parking": "Parking bays", "hangar": "Cycle hangars",
+    "hire": "Cycle hire", "ev": "EV charging", "scheme": "Street schemes",
+}
 
 # Sites with no postcode at all. Add a British National Grid easting and
 # northing to put one on the map; otherwise it is listed without a pin.
@@ -99,6 +110,45 @@ GLYPH = {
     "scheme": '<path d="M9 3h6l1.6 18h-3.3L12 8l-1.3 13H7.4z"/><rect x="11.2" '
               'y="6" width="1.6" height="3"/><rect x="11.2" y="11" width="1.6" '
               'height="3"/><rect x="11.2" y="16" width="1.6" height="3"/>',
+    # A glyph per planning category, drawn in the same language as the
+    # traffic symbols above: solid shapes, no fine detail, legible at 14px.
+    "house": '<path d="M12 3.4 4 10.2v10.4h6.4v-5.2h3.2v5.2H20V10.2z"/>',
+    "listed": '<rect x="4.6" y="4.4" width="14.8" height="2.6"/>'
+              '<rect x="7" y="7.6" width="2.4" height="10.4"/>'
+              '<rect x="10.8" y="7.6" width="2.4" height="10.4"/>'
+              '<rect x="14.6" y="7.6" width="2.4" height="10.4"/>'
+              '<rect x="3.6" y="18.6" width="16.8" height="2.6"/>',
+    "shopfront": '<path d="M3.4 4.6h17.2l1.4 4.4H2z"/>'
+                 '<rect x="4.6" y="10.6" width="6" height="9.8"/>'
+                 '<rect x="13" y="10.6" width="6.4" height="5.4"/>',
+    "newhomes": '<path d="M10.4 7 3 13.2v8.2h14.8v-8.2z"/>'
+                '<path d="M17.6 2.6h2.4v3h3v2.4h-3v3h-2.4v-3h-3V5.6h3z"/>',
+    "changeuse": '<path d="M4 9.2h11.4V6l5 4.6-5 4.6v-3.2H4z"/>'
+                 '<path d="M20 15.4H8.6v3.2l-5-4.6 5-4.6v3.2H20z"/>',
+    "crane": '<rect x="3.4" y="3.6" width="17.2" height="2.4"/>'
+             '<rect x="10.6" y="3.6" width="2.4" height="15.4"/>'
+             '<rect x="3.4" y="6" width="3" height="3"/>'
+             '<rect x="17.2" y="6" width="1.4" height="5.4"/>'
+             '<rect x="6.6" y="19" width="10.8" height="2.4"/>',
+    "pylon": '<path d="M12 2.8 5.2 21.2h2.5l1-2.8h6.6l1 2.8h2.5z"/>'
+             '<rect x="8.2" y="9.4" width="7.6" height="1.5"/>'
+             '<rect x="7" y="13.6" width="10" height="1.5"/>',
+    "clock": '<circle cx="12" cy="12" r="8.6" fill="none" '
+             'stroke="currentColor" stroke-width="2.2"/>'
+             '<path d="M12 6.6v6l3.8 2.3" fill="none" stroke="currentColor" '
+             'stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>',
+}
+
+
+CAT_GLYPH = {
+    "Extensions and alterations": "house",
+    "Listed building consent": "listed",
+    "Signs and shopfronts": "shopfront",
+    "New homes": "newhomes",
+    "Change of use": "changeuse",
+    "Major development": "crane",
+    "Infrastructure": "pylon",
+    "Opening hours": "clock",
 }
 
 
@@ -433,12 +483,12 @@ def main():
         pid += 1
         px, py = proj(*grp["at"])
         cats = [r["category"] for r in live]
-        colour = CAT_COLOUR.get(collections.Counter(cats).most_common(1)[0][0],
-                                CAT_FALLBACK)
+        top = collections.Counter(cats).most_common(1)[0][0]
+        colour = CAT_COLOUR.get(top, CAT_FALLBACK)
         deadline = min(r["comment_deadline"] for r in live)
         pins.append({"id": pid, "x": px, "y": py, "tx": px, "ty": py,
                      "n": len(live), "c": colour, "kind": "planning",
-                     "close": deadline})
+                     "close": deadline, "glyph": CAT_GLYPH.get(top, "house")})
         detail[pid] = {
             "kind": "planning",
             "title": live[0]["postcode"] or live[0]["address"][:40],
@@ -510,7 +560,7 @@ def main():
             rec["pts"] += allp
 
         if close >= iso_today:
-            lines.append(f'<path class="ln" stroke="{TRAFFIC_COLOUR}" '
+            lines.append(f'<path class="ln" stroke="{TRAFFIC_COLOUR["scheme"]}" '
                          f'd="{" ".join(seg)}"/>')
             for st, rec in bystreet.items():
                 if not rec["pts"]:
@@ -518,17 +568,17 @@ def main():
                 pid += 1
                 cx = sum(p[0] for p in rec["pts"])/len(rec["pts"])
                 cy = sum(p[1] for p in rec["pts"])/len(rec["pts"])
+                gl = glyph_for(rec["what"])
                 pins.append({"id": pid, "x": cx, "y": cy,
                              "tx": round(cx, 1), "ty": round(cy, 1),
-                             "n": len(rec["what"]), "c": TRAFFIC_COLOUR,
-                             "kind": "traffic", "close": close,
-                             "glyph": glyph_for(rec["what"])})
+                             "n": len(rec["what"]), "c": TRAFFIC_COLOUR[gl],
+                             "kind": "traffic", "close": close, "glyph": gl})
                 detail[pid] = {
                     "kind": "traffic", "title": st, "sub": ref,
                     "approx": False, "close": close, "closeTxt": fmt(close),
                     "more": TRAFFWEB,
                     "moreTxt": "See this scheme on the council's site",
-                    "colour": TRAFFIC_COLOUR,
+                    "colour": TRAFFIC_COLOUR[gl],
                     "items": [{"head": "", "body": w, "url": "", "note": ""}
                               for w in rec["what"]],
                 }
@@ -541,7 +591,7 @@ def main():
         traffic_sections.append(
             f'<section class="sch" data-close="{close}"'
             f'{" data-shut=1" if shut else ""}>'
-            f'<h4><span class="sw" style="background:{TRAFFIC_COLOUR}"></span>'
+            f'<h4><span class="sw" style="background:{TRAFFIC_COLOUR["scheme"]}"></span>'
             f'{html.escape(ref)}</h4>'
             f'<p class="dl" data-close="{close}" '
             f'data-open="Open to objection until {fmt(close)}" '
@@ -577,13 +627,15 @@ def main():
         lead = (f'<line class="lead" x1="{p["tx"]}" y1="{p["ty"]}" '
                 f'x2="{x}" y2="{y}"/>'
                 if math.dist((x, y), (p["tx"], p["ty"])) > 3 else "")
+        # Every marker is a disc, as on the paper's traffic card.
         r = 11 if (p["n"] > 1 or p.get("glyph")) else 8
-        shape = (f'<circle r="{r}" fill="{p["c"]}"/>' if p["kind"] == "planning"
-                 else f'<rect x="-{r-1}" y="-{r-1}" width="{2*(r-1)}" '
-                      f'height="{2*(r-1)}" rx="4" fill="{p["c"]}"/>')
-        # Road markers always carry their symbol: what an order changes is
-        # more use than how many lines it changes, and the card lists those.
-        if p.get("glyph"):
+        shape = f'<circle r="{r}" fill="{p["c"]}"/>'
+        # Roads always show their symbol. A planning marker shows the house
+        # unless it stands for several applications, when the count matters
+        # more.
+        if p["kind"] == "planning" and p["n"] > 1:
+            count = f'<text y="4">{p["n"]}</text>'
+        elif p.get("glyph"):
             count = (f'<svg class="gly" x="-7" y="-7" width="14" height="14" '
                      f'viewBox="0 0 24 24" aria-hidden="true">'
                      f'<g class="mark">{GLYPH[p["glyph"]]}</g></svg>')
@@ -611,8 +663,11 @@ def main():
         for k, c in CAT_COLOUR.items()
         if any(r["category"] == k and r["comment_deadline"] >= iso_today
                for r in plan))
-    legend += (f'<li><span class="sw sq" style="background:{TRAFFIC_COLOUR}">'
-               f'</span>Road changes</li>')
+    shown = {p["glyph"] for p in pins if p["kind"] == "traffic"}
+    legend += "".join(
+        f'<li><span class="sw sq" style="background:{TRAFFIC_COLOUR[g]}">'
+        f'</span>{TRAFFIC_LABEL[g]}</li>'
+        for g in ("parking", "hangar", "hire", "ev", "scheme") if g in shown)
 
     unplaced_html = ""
     if unplaced:
@@ -747,7 +802,7 @@ svg[data-k="4"] .rl{{display:inline}}
 .hkob .legend li{{display:flex;align-items:center;gap:.45em}}
 .hkob .sw{{display:inline-block;width:1.1em;height:.32em;border-radius:2px;
   flex:0 0 auto}}
-.hkob .sw.sq{{width:.7em;height:.7em;border-radius:2px}}
+.hkob .sw.sq{{width:.7em;height:.7em;border-radius:50%}}
 .hkob ul.rows{{list-style:none;padding:0;margin:0}}
 .hkob .row{{display:flex;gap:.5em;align-items:baseline;padding:.45em 0;
   border-bottom:1px solid var(--rule);font-size:.94em}}
@@ -774,9 +829,9 @@ svg[data-k="4"] .rl{{display:inline}}
 <h2>What you can object to in Hackney right now</h2>
 <p class="standfirst">Planning applications and road changes currently open for
  comment or objection, with the deadline for each. Tap a marker for what is
- proposed there. Round markers are buildings, square ones are roads. A symbol
- shows what a road order changes; a number means more than one application at
- that spot.</p>
+ proposed there. Plain markers are buildings; marked ones are road orders, and
+ the symbol shows what each changes. A number means more than one application
+ at that spot.</p>
 
 <div class="bar">
   <label class="search">
@@ -942,8 +997,8 @@ TEMPLATE_PAGE = """<!DOCTYPE html>
 *,*::before,*::after{{box-sizing:border-box}}
 :root{{
   --ink:#1a1a1a; --quiet:#5b5b57; --paper:#fafaf7; --chip:#eeece5;
-  --land:#eae5da; --wardline:#cdc5b5; --edge:#8c8271; --rule:#d7d5cc;
-  --brand:#1a1a1a; --accent:#a8322a; --sea:#f6f2e9;
+  --land:#eceae2; --wardline:#d6d3c9; --edge:#4a4a46; --rule:#d7d5cc;
+  --brand:#1a1a1a; --accent:#a8322a; --sea:#f4f3ee;
   --tip:#f7f9e9;
   color-scheme:light;
   padding-top:env(safe-area-inset-top,0px);
@@ -997,7 +1052,7 @@ h1{{font-size:1.6rem;line-height:1.15;margin:0 0 .25rem}}
 .legend li{{display:flex;align-items:center;gap:.4rem}}
 .sw{{display:inline-block;width:1.1em;height:.32em;border-radius:2px;
   flex:0 0 auto}}
-.sw.sq{{width:.7em;height:.7em}}
+.sw.sq{{width:.7em;height:.7em;border-radius:50%}}
 h3{{font-size:1rem;margin:1.4rem 0 .4rem}}
 ul.rows{{list-style:none;padding:0;margin:0}}
 .row{{display:flex;flex-wrap:wrap;gap:.2rem .5rem;
@@ -1021,15 +1076,15 @@ ul.rows{{list-style:none;padding:0;margin:0}}
 .hide{{display:none}}
 .wards{{fill:var(--land);stroke:var(--wardline);stroke-width:.8;
   stroke-linejoin:round;vector-effect:non-scaling-stroke}}
-.outline{{fill:none;stroke:var(--edge);stroke-width:2.5;stroke-linejoin:round;
+.outline{{fill:none;stroke:var(--edge);stroke-width:2;stroke-linejoin:round;
   vector-effect:non-scaling-stroke}}
 .veil{{fill:var(--sea);opacity:.74;pointer-events:none}}
 .rdc,.rdf{{fill:none;stroke-linecap:round;stroke-linejoin:round}}
 /* casings */
-.rdc1{{stroke:#cdc5b5;stroke-width:1.5}}
-.rdc2{{stroke:#c0b6a2;stroke-width:2.4}}
-.rdc3{{stroke:#a79d8c;stroke-width:3.4}}
-.rdc4{{stroke:#8c8271;stroke-width:4.4}}
+.rdc1{{stroke:#d3d0c5;stroke-width:1.5}}
+.rdc2{{stroke:#c7c3b6;stroke-width:2.4}}
+.rdc3{{stroke:#b2ada0;stroke-width:3.4}}
+.rdc4{{stroke:#97928a;stroke-width:4.4}}
 /* fills */
 .rdf1{{stroke:#fafaf7;stroke-width:.85}}
 .rdf2{{stroke:#f7f4ec;stroke-width:1.5}}
@@ -1109,8 +1164,8 @@ svg[data-k="4"] .rl{{display:inline}}
     <h1>What you can object to in Hackney right now</h1>
     <p class="standfirst">Planning applications and road changes open for
      comment or objection, with the deadline for each. Click a marker. Round
-     markers are buildings, square ones are roads. A symbol shows what a road
-     order changes; a number means more than one application at that spot.</p>
+     markers are buildings; marked ones are road orders, and the symbol shows
+     what each changes. A number means more than one application at that spot.</p>
   </div>
 
   <label class="search">
