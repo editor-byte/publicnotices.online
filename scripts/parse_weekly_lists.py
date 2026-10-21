@@ -130,6 +130,7 @@ def main():
                     help="earlier CSV built from printed notices")
     ap.add_argument("--out", default="planning-applications.csv")
     args = ap.parse_args()
+    today = dt.date.today()
 
     # Deadlines already known from the printed notices.
     known = {}
