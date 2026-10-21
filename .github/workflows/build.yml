@@ -55,8 +55,20 @@ jobs:
             exit 1
           fi
 
-      - name: Parse the published planning notices
-        run: python3 scripts/parse_planning.py embeds/*.html
+      - name: Fetch the council's weekly consultation sheets
+        run: python3 scripts/fetch_weekly_lists.py --weeks 12
+
+      - name: Build the planning rows
+        run: |
+          python3 scripts/parse_weekly_lists.py \
+            --deadlines planning-from-notices.csv \
+            --out planning-applications.csv
+
+      - name: Check the planning data looks sane
+        run: |
+          n=$(python3 -c "import csv;print(sum(1 for _ in csv.DictReader(open('planning-applications.csv'))))")
+          echo "$n planning applications"
+          [ "$n" -ge 50 ] || { echo "::error::Too few applications — the council's sheets may have moved or changed shape"; exit 1; }
 
       - name: Build the page
         run: |
