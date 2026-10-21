@@ -1033,19 +1033,6 @@ svg[data-k="4"] .rl{{display:inline}}
 .mcard .x{{position:absolute;right:.5rem;top:.4rem;border:0;background:none;
   font:inherit;font-size:1.2rem;line-height:1;color:var(--quiet);
   cursor:pointer;padding:.2rem .4rem}}
-.tip{{position:absolute;pointer-events:none;z-index:5;max-width:18rem;
-  background:var(--tip);color:var(--ink);border-radius:11px;
-  padding:.7rem .9rem;font-size:.86rem;line-height:1.4;
-  border:1px solid rgba(26,26,26,.10);
-  box-shadow:0 10px 26px rgba(26,26,26,.22),0 2px 6px rgba(26,26,26,.10);
-  opacity:0;transition:opacity .09s}}
-.tip.on{{opacity:1}}
-.tip b{{display:block;font-size:1rem;margin-bottom:.1rem}}
-.tip i{{font-style:normal;color:var(--quiet);font-size:.82rem}}
-.tip u{{display:block;text-decoration:none;margin-top:.35rem;
-  font-size:.82rem;color:var(--quiet)}}
-.tip s{{display:block;text-decoration:none;height:3px;width:2.2rem;
-  border-radius:2px;margin-bottom:.45rem}}
 .hint{{position:absolute;left:14px;bottom:14px;background:var(--paper);
   border-radius:999px;padding:.4rem .9rem;font-size:.82rem;color:var(--quiet);
   box-shadow:0 2px 8px rgba(0,0,0,.1)}}
@@ -1135,7 +1122,6 @@ svg[data-k="4"] .rl{{display:inline}}
     <button id="zreset" aria-label="Reset the view">⤾</button>
   </div>
   <div class="mcard hide" id="mcard" aria-live="polite"></div>
-  <div class="tip" id="tip" role="status"></div>
   <div class="hint" id="hint">Scroll to zoom · drag to pan</div>
 </main>
 </div>
@@ -1203,48 +1189,16 @@ svg[data-k="4"] .rl{{display:inline}}
     }});
   }});
 
-  // ---- hover preview ---------------------------------------------------
-  // svg, g and drag are declared here, before first use: the hover handler
-  // attaches a listener to svg straight away, and a reference to a
-  // not-yet-assigned var throws, which would abort everything below it
-  // including the filter buttons.
+  // svg, g and drag are declared before first use.
   var svg=$('map'), g=$('z'), VW={vieww}, VH={viewh};
   var drag=null;
-  // One tooltip, following the pointer. Brief by design: the full detail
-  // belongs in the panel, on click. A short delay stops it flickering as
-  // the pointer sweeps across a cluster.
-  var tip=$('tip'), tipTimer=null, stage=document.querySelector('.stage');
-  function tipHide(){{ clearTimeout(tipTimer); tip.classList.remove('on'); }}
-  function tipShow(p,e){{
-    var d=D[p.getAttribute('data-id')]; if(!d) return;
-    var n=d.items.length;
-    tip.innerHTML='<s style="background:'+d.colour+'"></s>'+
-      '<b>'+d.title+'</b><i>'+d.sub+
-      (n>1?' · '+n+' item'+(n===1?'':'s'):'')+'</i>'+
-      '<u>'+(shut(d.close)?'Closed ':'Comment by ')+d.closeTxt+'</u>';
-    var r=stage.getBoundingClientRect();
-    var x=e.clientX-r.left+14, y=e.clientY-r.top+14;
-    // Flip back inside the stage rather than overflowing it.
-    if(x+280>r.width) x=e.clientX-r.left-280;
-    if(y+90>r.height) y=e.clientY-r.top-90;
-    tip.style.left=Math.max(4,x)+'px';
-    tip.style.top=Math.max(4,y)+'px';
-    tip.classList.add('on');
-  }}
-  pins.forEach(function(p){{
-    p.addEventListener('pointerenter',function(e){{
-      if(e.pointerType==='touch'||drag) return;   // no hover on touch
-      clearTimeout(tipTimer);
-      tipTimer=setTimeout(function(){{tipShow(p,e);}},110);
-    }});
-    p.addEventListener('pointermove',function(e){{
-      if(tip.classList.contains('on')) tipShow(p,e);
-    }});
-    p.addEventListener('pointerleave',tipHide);
-  }});
+
+  // Clicks are detected here rather than on the markers: the pan code
+  // captures the pointer, which redirects the click away from whatever was
+  // under it. A pointerdown and pointerup within a few pixels is a click;
+  // anything further is a drag.
   var downAt=null, downPin=null;
   svg.addEventListener('pointerdown',function(e){{
-    tipHide();
     downAt=[e.clientX,e.clientY];
     downPin=e.target.closest ? e.target.closest('.pin') : null;
   }});
@@ -1252,7 +1206,7 @@ svg[data-k="4"] .rl{{display:inline}}
     if(!downAt) return;
     var moved=Math.hypot(e.clientX-downAt[0],e.clientY-downAt[1]);
     downAt=null;
-    if(moved>5) return;                      // that was a drag
+    if(moved>5) return;
     if(downPin) show(downPin.getAttribute('data-id'),downPin);
     else hideCard();
   }});
