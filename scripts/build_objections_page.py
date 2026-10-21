@@ -78,6 +78,46 @@ MANUAL_PLACE = {
 
 # ------------------------------------------------------------- projection
 
+# Glyphs lifted from the Hackney Citizen's own traffic card, so a reader
+# meets the same symbols here as in the paper's roundups. Drawn on a
+# 24x24 grid.
+GLYPH = {
+    "ev": '<path d="M13.6 2.4 5.2 13.4h5.1l-1.3 8.2 8.6-11.3h-5.2z"/>',
+    "parking": '<path d="M8.4 4.6h5.1c3.2 0 5.1 1.9 5.1 4.9 0 3.1-1.9 5-5.1 '
+               '5h-1.8v4.9H8.4zm3.3 7.1h1.5c1.5 0 2.3-.8 2.3-2.2 0-1.4-.8-2.2'
+               '-2.3-2.2h-1.5z"/>',
+    "hire": '<circle cx="6.4" cy="15.6" r="3.9" fill="none" stroke="currentColor"'
+            ' stroke-width="1.7"/><circle cx="17.6" cy="15.6" r="3.9" fill="none"'
+            ' stroke="currentColor" stroke-width="1.7"/><path d="M6.4 15.6 11 '
+            '8.4h5.2l1.4 7.2" fill="none" stroke="currentColor" stroke-width="1.7"'
+            ' stroke-linejoin="round"/><rect x="9.6" y="6.4" width="5.6" '
+            'height="1.7" rx=".8"/>',
+    "hangar": '<path d="M12 4.2 21 11.2v1.5H3v-1.5z"/><rect x="5" y="13.4" '
+              'width="14" height="5.4" rx="1.2" fill="none" stroke="currentColor"'
+              ' stroke-width="1.6"/><circle cx="9" cy="16.1" r="1.5"/>'
+              '<circle cx="15" cy="16.1" r="1.5"/>',
+    "scheme": '<path d="M9 3h6l1.6 18h-3.3L12 8l-1.3 13H7.4z"/><rect x="11.2" '
+              'y="6" width="1.6" height="3"/><rect x="11.2" y="11" width="1.6" '
+              'height="3"/><rect x="11.2" y="16" width="1.6" height="3"/>',
+}
+
+
+def glyph_for(texts):
+    """Pick the symbol that best describes what an order changes. Most
+    specific wins: a scheme that adds a charging point is an EV scheme even
+    though it also moves a permit bay."""
+    blob = " ".join(texts).lower()
+    if "electric vehicle" in blob or "charging" in blob:
+        return "ev"
+    if "cycle hire" in blob:
+        return "hire"
+    if "cycle" in blob:
+        return "hangar"
+    if "permit" in blob or "bay" in blob or "chargeable" in blob:
+        return "parking"
+    return "scheme"
+
+
 def wgs84_to_osgb(lat_deg, lon_deg):
     a2, b2 = 6378137.000, 6356752.3142
     e22 = 1 - (b2*b2)/(a2*a2)
@@ -481,7 +521,8 @@ def main():
                 pins.append({"id": pid, "x": cx, "y": cy,
                              "tx": round(cx, 1), "ty": round(cy, 1),
                              "n": len(rec["what"]), "c": TRAFFIC_COLOUR,
-                             "kind": "traffic", "close": close})
+                             "kind": "traffic", "close": close,
+                             "glyph": glyph_for(rec["what"])})
                 detail[pid] = {
                     "kind": "traffic", "title": st, "sub": ref,
                     "approx": False, "close": close, "closeTxt": fmt(close),
@@ -536,11 +577,20 @@ def main():
         lead = (f'<line class="lead" x1="{p["tx"]}" y1="{p["ty"]}" '
                 f'x2="{x}" y2="{y}"/>'
                 if math.dist((x, y), (p["tx"], p["ty"])) > 3 else "")
-        r = 11 if p["n"] > 1 else 8
+        r = 11 if (p["n"] > 1 or p.get("glyph")) else 8
         shape = (f'<circle r="{r}" fill="{p["c"]}"/>' if p["kind"] == "planning"
                  else f'<rect x="-{r-1}" y="-{r-1}" width="{2*(r-1)}" '
                       f'height="{2*(r-1)}" rx="4" fill="{p["c"]}"/>')
-        count = f'<text y="4">{p["n"]}</text>' if p["n"] > 1 else ""
+        # Road markers always carry their symbol: what an order changes is
+        # more use than how many lines it changes, and the card lists those.
+        if p.get("glyph"):
+            count = (f'<svg class="gly" x="-7" y="-7" width="14" height="14" '
+                     f'viewBox="0 0 24 24" aria-hidden="true">'
+                     f'<g class="mark">{GLYPH[p["glyph"]]}</g></svg>')
+        elif p["n"] > 1:
+            count = f'<text y="4">{p["n"]}</text>'
+        else:
+            count = ""
         pin_svg.append(
             f'{lead}<g class="pin {p["kind"]}" data-id="{p["id"]}" '
             f'data-close="{p["close"]}" data-x="{x}" data-y="{y}" '
@@ -724,8 +774,9 @@ svg[data-k="4"] .rl{{display:inline}}
 <h2>What you can object to in Hackney right now</h2>
 <p class="standfirst">Planning applications and road changes currently open for
  comment or objection, with the deadline for each. Tap a marker for what is
- proposed there. Round markers are buildings, square ones are roads; a number
- means more than one thing is happening at that spot.</p>
+ proposed there. Round markers are buildings, square ones are roads. A symbol
+ shows what a road order changes; a number means more than one application at
+ that spot.</p>
 
 <div class="bar">
   <label class="search">
@@ -1004,6 +1055,9 @@ svg[data-k="4"] .rl{{display:inline}}
   vector-effect:non-scaling-stroke}}
 .pin text{{fill:#fafaf7;font-size:11px;font-weight:600;text-anchor:middle;
   font-family:Lora,Georgia,serif;pointer-events:none}}
+.pin .gly{{overflow:visible;pointer-events:none;color:var(--paper)}}
+.pin .mark{{fill:var(--paper)}}
+.pin .mark [stroke]{{stroke:var(--paper)}}
 .pin:hover circle,.pin:hover rect{{stroke:var(--ink)}}
 .pin:focus{{outline:none}}
 .pin:focus-visible circle,.pin:focus-visible rect{{
@@ -1055,8 +1109,8 @@ svg[data-k="4"] .rl{{display:inline}}
     <h1>What you can object to in Hackney right now</h1>
     <p class="standfirst">Planning applications and road changes open for
      comment or objection, with the deadline for each. Click a marker. Round
-     markers are buildings, square ones are roads; a number means more than
-     one thing is happening at that spot.</p>
+     markers are buildings, square ones are roads. A symbol shows what a road
+     order changes; a number means more than one application at that spot.</p>
   </div>
 
   <label class="search">
