@@ -374,6 +374,17 @@ def main():
     today = dt.date.today()
     iso_today = today.isoformat()
 
+    # The council publishes its weekly lists about a week in arrears, so
+    # applications validated since then are in its register but in no sheet.
+    # Saying so is the honest alternative to implying the page is current.
+    data_to = ""
+    if pathlib.Path("data-current-to.txt").exists():
+        raw = pathlib.Path("data-current-to.txt").read_text().strip()
+        try:
+            data_to = dt.date.fromisoformat(raw).strftime("%-d %B %Y")
+        except ValueError:
+            data_to = ""
+
     wards = json.load(open(args.wards))["wards"]
     roads = (json.load(open(args.roads))["roads"]
              if pathlib.Path(args.roads).exists() else [])
@@ -737,6 +748,14 @@ def main():
         nplan=nplan, ntraffic=ntraffic,
         plan_closes=plan_closes, traffic_closes=traffic_closes,
         n_nodeadline=sum(1 for r in plan if not r['comment_deadline']),
+        currency=(
+            f"Planning data covers everything Hackney had published by "
+            f"<b>{data_to}</b>, the end of its most recent weekly list. "
+            f"Applications validated since then are on the council's "
+            f"register but not yet in any list it publishes, so they are "
+            f"not here. Road orders are current to today."
+            if data_to else
+            "Road orders are current to today."),
         generated=today.strftime("%-d %B %Y"))
 
     pathlib.Path(outname).write_text(card)
@@ -1125,7 +1144,10 @@ ul.rows{{list-style:none;padding:0;margin:0}}
 .sch li{{font-size:.88rem;margin:.2rem 0}}
 .nopc{{margin-top:1rem;font-size:.9rem;color:var(--quiet)}}
 [data-shut]{{opacity:.55}}
-.foot{{margin-top:1.6rem;color:var(--quiet);font-size:.8rem}}
+.currency{{margin:1.2rem 0 0;font-size:.84rem;color:var(--quiet);
+  border-top:1px solid var(--rule);padding-top:.8rem}}
+.currency b{{color:var(--ink)}}
+.foot{{margin-top:1rem;color:var(--quiet);font-size:.8rem}}
 .hide{{display:none}}
 .wards{{fill:var(--land);stroke:var(--wardline);stroke-width:.8;
   stroke-linejoin:round;vector-effect:non-scaling-stroke}}
@@ -1259,6 +1281,8 @@ svg[data-k="4"] .rl{{display:inline}}
   <h3>Road changes</h3>
 {traffic}
   {unplaced}
+
+  <p class="currency">{currency}</p>
 
   <p class="foot">Planning applications advertised by Hackney Council and
    reported in the Hackney Citizen; the deadline is 21 days from the date of

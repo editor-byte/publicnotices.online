@@ -202,6 +202,27 @@ def main():
             n += 1
         print(f"  {os.path.basename(path):<48}{n} applications")
 
+    # The newest week the council has published. Anything validated after
+    # this is in the register but not yet in any sheet, so the page must
+    # say what it is current to.
+    def week_end(name):
+        m = re.search(r"to-(\d{1,2})-([a-z]+)-(\d{4})", name)
+        if not m:
+            return None
+        try:
+            return dt.datetime.strptime(
+                f"{m.group(1)} {m.group(2)[:3]} {m.group(3)}", "%d %b %Y").date()
+        except ValueError:
+            return None
+
+    ends = [d for d in (week_end(os.path.basename(f)) for f in files) if d]
+    data_to = max(ends).isoformat() if ends else ""
+    if data_to:
+        print(f"\ncouncil data runs to {max(ends).strftime('%-d %B %Y')} "
+              f"({(today - max(ends)).days} days ago)")
+        with open("data-current-to.txt", "w") as f:
+            f.write(data_to + "\n")
+
     rows = [byref[r] for r in order]
     with open(args.out, "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=FIELDS)
