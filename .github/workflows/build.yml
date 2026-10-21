@@ -11,17 +11,15 @@ on:
   push:
     branches: [main]
     paths:
-      - "embeds/**"         # a new fortnightly notice rebuilds immediately
       - "scripts/**"
       - "data/**"
+      - "planning-from-notices.csv"   # the only place the 91 deadlines live
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
-  group: pages
+  group: publish
   cancel-in-progress: false
 
 jobs:
@@ -55,6 +53,9 @@ jobs:
             exit 1
           fi
 
+      # The planning source is Hackney's weekly consultation sheets. They
+      # carry no comment deadline, so the deadlines established from the
+      # printed notices are merged back in by reference.
       - name: Fetch the council's weekly consultation sheets
         run: python3 scripts/fetch_weekly_lists.py --weeks 12
 
@@ -69,6 +70,8 @@ jobs:
           n=$(python3 -c "import csv;print(sum(1 for _ in csv.DictReader(open('planning-applications.csv'))))")
           echo "$n planning applications"
           [ "$n" -ge 50 ] || { echo "::error::Too few applications — the council's sheets may have moved or changed shape"; exit 1; }
+          d=$(python3 -c "import csv;print(sum(1 for r in csv.DictReader(open('planning-applications.csv')) if r['comment_deadline']))")
+          echo "$d of them carry a published comment deadline"
 
       - name: Build the page
         run: |
@@ -99,18 +102,5 @@ jobs:
           path: |
             traffic_probe/*.csv
             traffic_probe/*.geojson
+            weekly_lists/*.csv
             planning-applications.csv
-
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: public
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4
