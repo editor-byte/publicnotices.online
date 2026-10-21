@@ -824,7 +824,7 @@ svg[data-k="4"] .rl{{display:inline}}
 }}
 </style>
 <div class="hkob" id="hkob">
-<h2>What you can object to in Hackney right now</h2>
+<h2>Planning and traffic changes — what’s happening near you and what you can do about it</h2>
 <p class="standfirst">Planning applications and road changes currently open for
  comment or objection, with the deadline for each. Tap a marker for what is
  proposed there. Plain markers are buildings; marked ones are road orders, and
@@ -987,7 +987,7 @@ TEMPLATE_PAGE = """<!DOCTYPE html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>What you can object to in Hackney right now</title>
+<title>Planning and traffic changes in Hackney — what’s happening near you and what you can do about it</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;0,700;1,400&display=swap" rel="stylesheet">
@@ -996,7 +996,7 @@ TEMPLATE_PAGE = """<!DOCTYPE html>
 :root{{
   --ink:#1a1a1a; --quiet:#5b5b57; --paper:#fafaf7; --chip:#eeece5;
   --land:#eceae2; --wardline:#d6d3c9; --edge:#4a4a46; --rule:#d7d5cc;
-  --brand:#1a1a1a; --accent:#a8322a; --sea:#f4f3ee;
+  --brand:#4a4a46; --accent:#4a4a46; --sea:#f4f3ee;
   --tip:#f7f9e9;
   color-scheme:light;
   padding-top:env(safe-area-inset-top,0px);
@@ -1007,7 +1007,7 @@ body{{font-family:Lora,Georgia,'Times New Roman',serif;color:var(--ink);
 .masthead{{background:var(--brand);color:#fafaf7;margin:-1.5rem -1.4rem 1.2rem;
   padding:1.3rem 1.4rem 1.1rem}}
 .masthead h1{{color:#fafaf7;margin:0}}
-.masthead .standfirst{{color:#bdbab2;margin:.3rem 0 0}}
+.masthead .standfirst{{color:#c8c6bf;margin:0}}
 .shell{{display:flex;height:100%;align-items:stretch;
   max-width:100%}}
 .panel{{flex:0 0 25rem;max-width:25rem;min-width:0;overflow-y:auto;
@@ -1017,7 +1017,8 @@ body{{font-family:Lora,Georgia,'Times New Roman',serif;color:var(--ink);
 .stage svg{{position:absolute;inset:0;width:100%;height:100%;touch-action:none;
   cursor:grab}}
 .stage svg.drag{{cursor:grabbing}}
-h1{{font-size:1.6rem;line-height:1.15;margin:0 0 .25rem}}
+h1{{font-size:1.38rem;line-height:1.2;margin:0 0 .75rem;
+  text-wrap:balance}}
 .standfirst{{margin:0 0 1.1rem;color:var(--quiet);font-size:.97rem}}
 .search{{display:flex;align-items:center;gap:.5rem;border:1px solid var(--rule);
   border-radius:999px;padding:.55rem 1rem;background:#fff;
@@ -1029,7 +1030,7 @@ h1{{font-size:1.6rem;line-height:1.15;margin:0 0 .25rem}}
 .kinds button{{font:inherit;font-size:.88rem;padding:.35rem .8rem;
   border:1px solid var(--rule);border-radius:999px;background:var(--paper);
   color:var(--ink);cursor:pointer}}
-.kinds button[aria-pressed=true]{{background:var(--brand);color:var(--accent);
+.kinds button[aria-pressed=true]{{background:var(--brand);color:#fafaf7;
   border-color:var(--brand)}}
 .count{{font-size:.93rem;color:var(--quiet);padding-bottom:.8rem;
   border-bottom:1px solid var(--rule);margin-bottom:1rem}}
@@ -1114,7 +1115,7 @@ svg[data-k="4"] .rl{{display:inline}}
 .pin:hover circle,.pin:hover rect{{stroke:var(--ink)}}
 .pin:focus{{outline:none}}
 .pin:focus-visible circle,.pin:focus-visible rect{{
-  stroke:var(--accent);stroke-width:3.5}}
+  stroke:var(--ink);stroke-width:3.5}}
 .pin.on circle,.pin.on rect{{stroke:var(--ink);stroke-width:3}}
 .zoom{{position:absolute;right:14px;top:14px;display:flex;flex-direction:column;
   gap:.3rem}}
@@ -1136,7 +1137,8 @@ svg[data-k="4"] .rl{{display:inline}}
 .mcard .it span{{font-size:.86rem;color:var(--quiet)}}
 .mcard .close{{margin-top:.7rem;font-size:.9rem;font-weight:600}}
 .mcard .more{{display:inline-block;margin-top:.5rem;font-size:.86rem;
-  color:var(--accent)}}
+  color:var(--ink);text-decoration:underline;
+  text-underline-offset:2px}}
 .mcard .x{{position:absolute;right:.5rem;top:.4rem;border:0;background:none;
   font:inherit;font-size:1.2rem;line-height:1;color:var(--quiet);
   cursor:pointer;padding:.2rem .4rem}}
@@ -1159,11 +1161,12 @@ svg[data-k="4"] .rl{{display:inline}}
 <div class="shell">
 <aside class="panel">
   <div class="masthead">
-    <h1>What you can object to in Hackney right now</h1>
-    <p class="standfirst">Planning applications and road changes open for
-     comment or objection, with the deadline for each. Click a marker. Round
-     markers are buildings; marked ones are road orders, and the symbol shows
-     what each changes. A number means more than one application at that spot.</p>
+    <h1>Planning and traffic changes — what’s happening near you and what
+     you can do about it</h1>
+    <p class="standfirst">Everything in Hackney still open for comment, with
+     the deadline for each. Click a marker. Plain markers are buildings;
+     marked ones are road orders, and the symbol shows what each changes. A
+     number means more than one application at that spot.</p>
   </div>
 
   <label class="search">
