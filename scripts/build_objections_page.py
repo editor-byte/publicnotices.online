@@ -53,6 +53,7 @@ CAT_COLOUR = {
     "Major development": "#324028",            # deep forest
     "Opening hours": "#c08a2e",                # mustard
     "Infrastructure": "#928a79",               # stone
+    "Conditions and amendments": "#7d7466",    # pale stone
 }
 CAT_FALLBACK = "#6f6353"
 # Road scheme colours, as the Hackney Citizen's traffic card uses them.
@@ -133,6 +134,12 @@ GLYPH = {
     "pylon": '<path d="M12 2.8 5.2 21.2h2.5l1-2.8h6.6l1 2.8h2.5z"/>'
              '<rect x="8.2" y="9.4" width="7.6" height="1.5"/>'
              '<rect x="7" y="13.6" width="10" height="1.5"/>',
+    # A sheet of paper with lines: a procedural application, following a
+    # permission already granted.
+    "doc": '<path d="M6 2.8h8.4L19 7.4v13.8H6z"/>'
+           '<rect x="8.4" y="11" width="8.2" height="1.6" fill="#fff"/>'
+           '<rect x="8.4" y="14.4" width="8.2" height="1.6" fill="#fff"/>'
+           '<rect x="8.4" y="17.8" width="5" height="1.6" fill="#fff"/>',
     "clock": '<circle cx="12" cy="12" r="8.6" fill="none" '
              'stroke="currentColor" stroke-width="2.2"/>'
              '<path d="M12 6.6v6l3.8 2.3" fill="none" stroke="currentColor" '
@@ -149,6 +156,7 @@ CAT_GLYPH = {
     "Major development": "crane",
     "Infrastructure": "pylon",
     "Opening hours": "clock",
+    "Conditions and amendments": "doc",
 }
 
 
@@ -275,10 +283,9 @@ CHAR_W = 0.55           # average glyph width in Lora, as a fraction of em
 
 def label_fits(name, pts, w):
     """
-    textPath draws only the part of the text that fits along the path and
-    silently clips the rest, so a long name on a short road comes out as
-    "ghton Ro". Require the road to be comfortably longer than the label
-    will be at the zoom where it first appears.
+    A label longer than the road it names reads as detached from it, so
+    require the road to be comfortably longer than the label will be at the
+    zoom where it first appears.
     """
     k = REVEAL_K.get(w, 3.6)
     text_units = CHAR_W * (LABEL_PX / k) * len(name)
@@ -398,6 +405,11 @@ def main():
     def proj(e, n):
         return round(ox + (e-minx)*s, 1), round(H - oy - (n-miny)*s, 1)
 
+    ward_centre = {}
+    for w in wards:
+        big = max(w["rings"], key=ring_area)
+        ward_centre[w["name"].lower()] = ring_centroid(big)
+
     ward_d = []
     for w in wards:
         for ring in w["rings"]:
@@ -425,7 +437,7 @@ def main():
         f'<path class="rdf rdf{w}" vector-effect="non-scaling-stroke" '
         f'd="{" ".join(byw[w])}"/>' for w in sorted(byw))
 
-    # Street labels, set along the road itself with textPath and revealed as
+    # Street labels, placed at the midpoint of each road and revealed as
     # the reader zooms: main roads first, residential streets last. One per
     # name per grid cell, so a long road gets labelled a few times along its
     # length rather than once per segment.
@@ -437,15 +449,23 @@ def main():
         if cell in seen:
             continue
         seen.add(cell)
-        if pts[-1][0] < pts[0][0]:      # keep text the right way up
-            pts = pts[::-1]
-        pid = f"r{len(road_labels)}"
-        d = "M" + " L".join(f"{x},{y}" for x, y in pts)
+        # Placed once at the midpoint and rotated to the road's bearing,
+        # rather than threaded along the geometry: a path with a bend in it
+        # drops and spaces letters, which is what turned Amhurst Road into
+        # "Amhust Road".
+        mid = len(pts) // 2
+        mx, my = pts[mid]
+        ax, ay = pts[0]
+        bx, by = pts[-1]
+        ang = math.degrees(math.atan2(by - ay, bx - ax))
+        if ang > 90:
+            ang -= 180
+        elif ang < -90:
+            ang += 180
         road_labels.append(
-            f'<path id="{pid}" class="rp" fill="none" stroke="none" d="{d}"/>'
-            f'<text class="rl rl{w}" dy="-2.5">'
-            f'<textPath href="#{pid}" startOffset="50%" text-anchor="middle">'
-            f'{html.escape(name.title())}</textPath></text>')
+            f'<text class="rl rl{w}" x="0" y="-3" text-anchor="middle" '
+            f'transform="translate({round(mx,1)},{round(my,1)}) '
+            f'rotate({round(ang,1)})">{html.escape(name.title())}</text>')
     road_label_svg = "".join(road_labels)
     if roads:
         print(f"{len(road_labels)} street labels from {len(named)} "
@@ -469,6 +489,13 @@ def main():
             sector = pc.rsplit(" ", 1)[0] + " " + pc.rsplit(" ", 1)[1][0] if " " in pc else ""
             if sector in sectors:
                 at, how = sectors[sector], "sector"
+            else:
+                # No postcode in the council's own list. The ward is the
+                # only location it gives, so use that and say so.
+                wn = re.sub(r"\s+ward$", "", (r.get("ward") or "").strip(),
+                            flags=re.I).lower()
+                if wn in ward_centre:
+                    at, how = ward_centre[wn], "ward"
         if at is None:
             unplaced.append(r)
             continue
@@ -477,7 +504,12 @@ def main():
 
     for key, grp in bypc.items():
         rows = grp["rows"]
-        live = [r for r in rows if r["comment_deadline"] >= iso_today]
+        # A row with no deadline has not closed — the council has simply
+        # not published one. Hiding it would leave a reader thinking there
+        # is nothing to comment on.
+        live = [r for r in rows
+                if not r["comment_deadline"]
+                or r["comment_deadline"] >= iso_today]
         if not live:
             continue                      # closed: list only
         pid += 1
@@ -485,7 +517,8 @@ def main():
         cats = [r["category"] for r in live]
         top = collections.Counter(cats).most_common(1)[0][0]
         colour = CAT_COLOUR.get(top, CAT_FALLBACK)
-        deadline = min(r["comment_deadline"] for r in live)
+        dls = [r["comment_deadline"] for r in live if r["comment_deadline"]]
+        deadline = min(dls) if dls else ""
         pins.append({"id": pid, "x": px, "y": py, "tx": px, "ty": py,
                      "n": len(live), "c": colour, "kind": "planning",
                      "close": deadline, "glyph": CAT_GLYPH.get(top, "house")})
@@ -495,7 +528,13 @@ def main():
             "sub": f"{len(live)} planning application"
                    f"{'s' if len(live) != 1 else ''}",
             "approx": grp["how"] != "exact",
-            "close": deadline, "closeTxt": fmt(deadline), "colour": colour,
+            "approxTxt": {"sector": "position approximate",
+                          "ward": "ward only — the council's list gives no "
+                                  "postcode"}.get(grp["how"], ""),
+            "close": deadline,
+            "closeTxt": (fmt(deadline) if deadline else
+                         "The council has not published a deadline"),
+            "noDeadline": not deadline, "colour": colour,
             "items": [{
                 "head": f"{r['reference']} · {r['address']}",
                 "body": f"{r['category']}"
@@ -520,13 +559,16 @@ def main():
             f'{" data-shut=1" if shut else ""}>'
             f'<span class="sw" style="background:'
             f'{CAT_COLOUR.get(r["category"], CAT_FALLBACK)}"></span>'
-            f'<b>{html.escape(r["address"])}</b> — {link}. '
-            f'{html.escape(r["category"])}'
-            f'{" · " + html.escape(r["designation"]) if r["designation"] else ""}. '
-            f'<span class="dl" data-close="{r["comment_deadline"]}" '
-            f'data-open="Comment by {fmt(r["comment_deadline"])}" '
-            f'data-closed="Closed {fmt(r["comment_deadline"])}">'
-            f'Comment by {fmt(r["comment_deadline"])}</span></li>')
+            f'<b>{html.escape(r["address"])}</b>'
+            f'<span class="meta">{link} · {html.escape(r["category"])}'
+            f'{" · " + html.escape(r["designation"]) if r["designation"] else ""}'
+            f'</span>'
+            + (f'<span class="dl" data-close="{r["comment_deadline"]}" '
+               f'data-open="Comment by {fmt(r["comment_deadline"])}" '
+               f'data-closed="Closed {fmt(r["comment_deadline"])}">'
+               f'Comment by {fmt(r["comment_deadline"])}</span></li>'
+               if r["comment_deadline"] else
+               '<span class="dl nodl">No deadline published</span></li>'))
 
     # ---------------- traffic: pin per street, line per scheme ----------
     schemes = collections.OrderedDict()
@@ -598,9 +640,12 @@ def main():
             f'<p class="adv">Advertised {fmt(advert)} · '
             f'{len(bystreet)} streets</p><ul>{rows}</ul></section>')
 
-    declutter(pins)
+    shown_first = [p for p in pins if p["close"]]
+    declutter(shown_first)
+    # The rest keep their true positions; they overlap each other when
+    # revealed, which is honest, and they no longer distort the main view.
 
-    obstacles = [(p["x"], p["y"]) for p in pins]
+    obstacles = [(p["x"], p["y"]) for p in shown_first]
     labels = []
     for w in wards:
         big = max(w["rings"], key=ring_area)
@@ -622,9 +667,6 @@ def main():
     pin_svg = []
     for p in pins:
         x, y = round(p["x"], 1), round(p["y"], 1)
-        lead = (f'<line class="lead" x1="{p["tx"]}" y1="{p["ty"]}" '
-                f'x2="{x}" y2="{y}"/>'
-                if math.dist((x, y), (p["tx"], p["ty"])) > 3 else "")
         # Every marker is a disc, as on the paper's traffic card.
         r = 11 if (p["n"] > 1 or p.get("glyph")) else 8
         shape = f'<circle r="{r}" fill="{p["c"]}"/>'
@@ -642,7 +684,8 @@ def main():
         else:
             count = ""
         pin_svg.append(
-            f'{lead}<g class="pin {p["kind"]}" data-id="{p["id"]}" '
+            f'<g class="pin {p["kind"]}{"" if p["close"] else " nodl"}" '
+            f'data-id="{p["id"]}" '
             f'data-close="{p["close"]}" data-x="{x}" data-y="{y}" '
             f'transform="translate({x},{y})" '
             f'tabindex="0" role="button">{shape}{count}</g>')
@@ -693,6 +736,7 @@ def main():
         detail=json.dumps(detail),
         nplan=nplan, ntraffic=ntraffic,
         plan_closes=plan_closes, traffic_closes=traffic_closes,
+        n_nodeadline=sum(1 for r in plan if not r['comment_deadline']),
         generated=today.strftime("%-d %B %Y"))
 
     pathlib.Path(outname).write_text(card)
@@ -760,9 +804,7 @@ TEMPLATE = """<!--kg-card-begin: html-->
   font-family:Lora,Georgia,serif;paint-order:stroke;stroke:var(--land);
   stroke-width:3px;stroke-linejoin:round;pointer-events:none}}
 .hkob .ln{{fill:none;stroke-width:2.5;stroke-linecap:round;opacity:.45}}
-.hkob .lead{{stroke:#8d8880;stroke-width:.9}}
 .hkob /* Street labels: hidden until the reveal bands below switch them on. */
-.rp{{fill:none;stroke:none}}
 .rl{{font-family:Lora,Georgia,serif;fill:#5b5b57;font-size:9px;
   paint-order:stroke;stroke:var(--land);stroke-width:2.6px;
   stroke-linejoin:round;pointer-events:none;display:none}}
@@ -903,7 +945,9 @@ svg[data-k="4"] .rl{{display:inline}}
   try{{today=new Intl.DateTimeFormat('en-CA',{{timeZone:'Europe/London',
     year:'numeric',month:'2-digit',day:'2-digit'}}).format(new Date());}}
   catch(e){{var n=new Date();today=n.getFullYear()+'-'+('0'+(n.getMonth()+1)).slice(-2)+'-'+('0'+n.getDate()).slice(-2);}}
-  var shut=function(c){{return c && today>c;}};
+  // No deadline means the council has not published one, not
+  // that it has passed.
+  var shut=function(c){{return !!c && today>c;}};
 
   Array.prototype.forEach.call(root.querySelectorAll('.dl[data-close]'),function(el){{
     var c=shut(el.getAttribute('data-close'));
@@ -921,6 +965,7 @@ svg[data-k="4"] .rl{{display:inline}}
     return csv.split(',').filter(function(c){{return c && today<=c;}}).length;
   }}
   var np=openCount('{plan_closes}'), nt=openCount('{traffic_closes}');
+  var nd={n_nodeadline};
   document.getElementById('hkob-n').textContent =
     np+(np===1?' planning application':' planning applications');
   document.getElementById('hkob-t').textContent =
@@ -939,7 +984,7 @@ svg[data-k="4"] .rl{{display:inline}}
     card.innerHTML='<span class="tag">'+
       (closed?'Closed':(d.kind==='planning'?'Planning':'Road change'))+
       '</span><h4>'+d.title+'</h4><p class="sub">'+d.sub+
-      (d.approx?' · position approximate':'')+'</p>'+items+
+      (d.approxTxt?' · '+d.approxTxt:'')+'</p>'+items+
       '<p class="close">'+(closed?'Closed ':'Comment by ')+d.closeTxt+'</p>';
     card.style.borderLeft='4px solid '+d.colour;
     card.classList.remove('hide'); hint.classList.add('hide');
@@ -1004,10 +1049,9 @@ TEMPLATE_PAGE = """<!DOCTYPE html>
 html,body{{height:100%;margin:0;overflow-x:hidden}}
 body{{font-family:Lora,Georgia,'Times New Roman',serif;color:var(--ink);
   background:var(--paper);line-height:1.5}}
-.masthead{{background:var(--brand);color:#fafaf7;margin:-1.5rem -1.4rem 1.2rem;
-  padding:1.3rem 1.4rem 1.1rem}}
+.masthead{{background:var(--brand);color:#fafaf7;margin:-1.5rem -1.4rem 1rem;
+  padding:1.15rem 1.4rem 1.05rem}}
 .masthead h1{{color:#fafaf7;margin:0}}
-.masthead .standfirst{{color:#c8c6bf;margin:0}}
 .shell{{display:flex;height:100%;align-items:stretch;
   max-width:100%}}
 .panel{{flex:0 0 25rem;max-width:25rem;min-width:0;overflow-y:auto;
@@ -1020,6 +1064,9 @@ body{{font-family:Lora,Georgia,'Times New Roman',serif;color:var(--ink);
 h1{{font-size:1.38rem;line-height:1.2;margin:0 0 .75rem;
   text-wrap:balance}}
 .standfirst{{margin:0 0 1.1rem;color:var(--quiet);font-size:.97rem}}
+a{{color:var(--brand);text-decoration:underline;
+  text-underline-offset:2px;text-decoration-thickness:1px}}
+a:hover,a:focus{{color:var(--ink);text-decoration-thickness:2px}}
 .search{{display:flex;align-items:center;gap:.5rem;border:1px solid var(--rule);
   border-radius:999px;padding:.55rem 1rem;background:#fff;
   margin-bottom:.7rem}}
@@ -1032,6 +1079,11 @@ h1{{font-size:1.38rem;line-height:1.2;margin:0 0 .75rem;
   color:var(--ink);cursor:pointer}}
 .kinds button[aria-pressed=true]{{background:var(--brand);color:#fafaf7;
   border-color:var(--brand)}}
+.nodl-toggle{{display:flex;gap:.5rem;align-items:flex-start;
+  margin:0 0 .9rem;font-size:.85rem;color:var(--quiet);cursor:pointer;
+  line-height:1.35}}
+.nodl-toggle input{{margin-top:.22rem;flex:0 0 auto}}
+.nodl-toggle b{{color:var(--ink)}}
 .count{{font-size:.93rem;color:var(--quiet);padding-bottom:.8rem;
   border-bottom:1px solid var(--rule);margin-bottom:1rem}}
 .count b{{color:var(--ink)}}
@@ -1054,15 +1106,17 @@ h1{{font-size:1.38rem;line-height:1.2;margin:0 0 .75rem;
 .sw.sq{{width:.7em;height:.7em;border-radius:50%}}
 h3{{font-size:1rem;margin:1.4rem 0 .4rem}}
 ul.rows{{list-style:none;padding:0;margin:0}}
-.row{{display:flex;flex-wrap:wrap;gap:.2rem .5rem;
-  align-items:baseline;padding:.5rem 0;min-width:0;
-  border-bottom:1px solid var(--rule);font-size:.9rem;
-  overflow-wrap:anywhere}}
-.row b{{flex:1 1 100%}}
-.row .sw{{flex:0 0 auto}}
+.row{{display:grid;grid-template-columns:1.3em 1fr;gap:.1rem .5rem;
+  padding:.65rem 0;min-width:0;border-bottom:1px solid var(--rule);
+  font-size:.9rem;overflow-wrap:anywhere}}
+.row .sw{{grid-row:1;margin-top:.45em}}
+.row b{{grid-column:2}}
+.row .meta,.row .dl{{grid-column:2;color:var(--quiet);font-size:.84rem}}
+.row .dl{{white-space:normal}}
 .row .sw{{margin-top:.4rem}}
 .dl{{color:var(--quiet);font-size:.88rem;white-space:nowrap}}
 .flag{{color:#8a5a2b;font-size:.88rem}}
+.nodl{{font-style:italic}}
 .sch{{border-top:1px solid var(--rule);padding-top:.7rem;margin-top:.9rem}}
 .sch h4{{font-size:1rem;margin:0 0 .2rem;display:flex;align-items:center;
   gap:.5rem}}
@@ -1094,9 +1148,7 @@ ul.rows{{list-style:none;padding:0;margin:0}}
   stroke-width:3px;stroke-linejoin:round;pointer-events:none}}
 .ln{{fill:none;stroke-width:2.5;stroke-linecap:round;opacity:.45;
   vector-effect:non-scaling-stroke}}
-.lead{{stroke:#8d8880;stroke-width:.9;vector-effect:non-scaling-stroke}}
 /* Street labels: hidden until the reveal bands below switch them on. */
-.rp{{fill:none;stroke:none}}
 .rl{{font-family:Lora,Georgia,serif;fill:#5b5b57;font-size:9px;
   paint-order:stroke;stroke:var(--land);stroke-width:2.6px;
   stroke-linejoin:round;pointer-events:none;display:none}}
@@ -1134,6 +1186,7 @@ svg[data-k="4"] .rl{{display:inline}}
 .mcard .sub{{margin:0 0 .6rem;color:var(--quiet);font-size:.85rem}}
 .mcard .it{{border-top:1px solid var(--rule);padding-top:.5rem;margin-top:.5rem}}
 .mcard .it b{{display:block;font-size:.9rem;margin-bottom:.1rem}}
+.mcard .it b a{{color:var(--ink)}}
 .mcard .it span{{font-size:.86rem;color:var(--quiet)}}
 .mcard .close{{margin-top:.7rem;font-size:.9rem;font-weight:600}}
 .mcard .more{{display:inline-block;margin-top:.5rem;font-size:.86rem;
@@ -1150,10 +1203,19 @@ svg[data-k="4"] .rl{{display:inline}}
 }}
 @media (max-width:860px){{
   html,body{{height:auto}}
-  .shell{{display:block}}
-  .panel{{max-width:none;flex:none;width:100%;border-right:0;
+  /* On a phone the map comes first: a reader wants to find their street,
+     not read a list. The panel follows it. */
+  .shell{{display:flex;flex-direction:column}}
+  .stage{{order:-1;height:62vh;min-height:20rem;
     border-bottom:1px solid var(--rule)}}
-  .stage{{height:70vh}}
+  .panel{{max-width:none;flex:none;width:100%;border-right:0;
+    padding-top:1.1rem}}
+  /* The masthead is full-bleed in the panel, so it needs no negative top
+     margin once the map sits above it. */
+  .masthead{{margin:-1.1rem -1.4rem 1.2rem}}
+  .mcard{{position:static;width:auto;margin:.8rem;max-height:none;
+    box-shadow:none;border:1px solid var(--rule)}}
+  .hint{{display:none}}
 }}
 </style>
 </head>
@@ -1163,11 +1225,9 @@ svg[data-k="4"] .rl{{display:inline}}
   <div class="masthead">
     <h1>Planning and traffic changes — what’s happening near you and what
      you can do about it</h1>
-    <p class="standfirst">Everything in Hackney still open for comment, with
-     the deadline for each. Click a marker. Plain markers are buildings;
-     marked ones are road orders, and the symbol shows what each changes. A
-     number means more than one application at that spot.</p>
   </div>
+  <p class="standfirst">Everything in Hackney still open for comment, with
+   the deadline for each.</p>
 
   <label class="search">
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#5f5f6d"
@@ -1181,6 +1241,11 @@ svg[data-k="4"] .rl{{display:inline}}
     <button id="k-plan" aria-pressed="false">Buildings</button>
     <button id="k-road" aria-pressed="false">Roads</button>
   </div>
+  <label class="nodl-toggle">
+    <input type="checkbox" id="k-nodl">
+    <span>Also show the <b id="n-nodl"></b> applications the council has
+     published no deadline for</span>
+  </label>
 
   <p class="count"><b id="n-plan">{nplan} planning applications</b>
    <span id="n-road">and {ntraffic} road schemes</span> open now</p>
@@ -1242,7 +1307,9 @@ svg[data-k="4"] .rl{{display:inline}}
   try{{today=new Intl.DateTimeFormat('en-CA',{{timeZone:'Europe/London',
     year:'numeric',month:'2-digit',day:'2-digit'}}).format(new Date());}}
   catch(e){{var n=new Date();today=n.getFullYear()+'-'+('0'+(n.getMonth()+1)).slice(-2)+'-'+('0'+n.getDate()).slice(-2);}}
-  var shut=function(c){{return c && today>c;}};
+  // No deadline means the council has not published one, not
+  // that it has passed.
+  var shut=function(c){{return !!c && today>c;}};
   var $=function(id){{return document.getElementById(id);}};
   var pins=[].slice.call(document.querySelectorAll('.pin'));
 
@@ -1262,8 +1329,10 @@ svg[data-k="4"] .rl{{display:inline}}
     return csv.split(',').filter(function(c){{return c && today<=c;}}).length;
   }}
   var np=openCount('{plan_closes}'), nt=openCount('{traffic_closes}');
+  var nd={n_nodeadline};
   $('n-plan').textContent=np+(np===1?' planning application':' planning applications');
-  $('n-road').textContent='and '+nt+(nt===1?' road scheme':' road schemes');
+  $('n-road').textContent='and '+nt+(nt===1?' road scheme':' road schemes')+
+    ' with a published deadline';
 
   // ---- selection -------------------------------------------------------
   var mcard=$('mcard');
@@ -1284,8 +1353,9 @@ svg[data-k="4"] .rl{{display:inline}}
       '<span class="tag">'+
       (closed?'Closed':(d.kind==='planning'?'Planning':'Road change'))+
       '</span><h2>'+d.title+'</h2><p class="sub">'+d.sub+
-      (d.approx?' · position approximate':'')+'</p>'+items+
-      '<p class="close">'+(closed?'Closed ':'Comment by ')+d.closeTxt+'</p>'+
+      (d.approxTxt?' · '+d.approxTxt:'')+'</p>'+items+
+      '<p class="close">'+(d.noDeadline?d.closeTxt:
+        (closed?'Closed ':'Comment by ')+d.closeTxt)+'</p>'+
       more;
     mcard.style.borderLeftColor=d.colour;
     mcard.classList.remove('hide');
@@ -1385,8 +1455,13 @@ svg[data-k="4"] .rl{{display:inline}}
 
   // ---- filters ---------------------------------------------------------
   var kind='all';
+  var showNoDl=false;
   function matches(p){{
     if(shut(p.getAttribute('data-close'))) return false;
+    // Applications with no published deadline are off by default: there
+    // are far more of them than there are dated ones, and they would
+    // bury what a reader can actually act on.
+    if(!showNoDl && p.classList.contains('nodl')) return false;
     if(kind!=='all' && p.classList.contains(kind==='plan'?'traffic':'planning'))
       return false;
     var t=$('q').value.trim().toLowerCase();
@@ -1404,6 +1479,19 @@ svg[data-k="4"] .rl{{display:inline}}
     }});
   }}
   $('q').addEventListener('input',refilter);
+  $('n-nodl').textContent=nd;
+  $('k-nodl').addEventListener('change',function(e){{
+    showNoDl=e.target.checked; refilter();
+  }});
+  // The list keeps everything; only the map hides them.
+  function listNoDl(){{
+    document.querySelectorAll('.row').forEach(function(el){{
+      if(el.querySelector('.nodl')) el.style.display=showNoDl?'':'none';
+    }});
+  }}
+  $('k-nodl').addEventListener('change',listNoDl);
+  listNoDl();
+  refilter();        // apply the defaults before anything is touched
   [['k-all','all'],['k-plan','plan'],['k-road','road']].forEach(function(pair){{
     $(pair[0]).addEventListener('click',function(){{
       kind=pair[1];
