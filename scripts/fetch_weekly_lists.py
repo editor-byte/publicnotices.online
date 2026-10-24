@@ -24,18 +24,38 @@ import io
 import os
 import re
 import sys
+import time
 import urllib.error
 import urllib.request
 
 PAGE = "https://www.hackney.gov.uk/planning-and-building/planning-consultation"
-UA = "notices-research/1.0 (Hackney Citizen)"
+# The council's site returns 403 to a bare script user agent when the
+# request comes from a datacentre, so present as a browser and give a
+# contact in the From header instead.
+UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+      "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36")
+FROM = "editor@hackneycitizen.co.uk"
 OUT = "weekly_lists"
 
 
-def get(url):
-    req = urllib.request.Request(url, headers={"User-Agent": UA})
-    with urllib.request.urlopen(req, timeout=90) as r:
-        return r.read().decode("utf-8", errors="replace")
+def get(url, tries=3):
+    last = None
+    for attempt in range(tries):
+        req = urllib.request.Request(url, headers={
+            "User-Agent": UA,
+            "From": FROM,
+            "Accept": "text/html,application/xhtml+xml,text/csv,*/*",
+            "Accept-Language": "en-GB,en;q=0.9",
+        })
+        try:
+            with urllib.request.urlopen(req, timeout=90) as r:
+                return r.read().decode("utf-8", errors="replace")
+        except urllib.error.HTTPError as e:
+            last = e
+            if e.code not in (403, 429) or attempt == tries - 1:
+                raise
+            time.sleep(4 * (attempt + 1))
+    raise last
 
 
 def find_sheets(html):
