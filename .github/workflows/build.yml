@@ -7,13 +7,13 @@ name: Rebuild and publish
 on:
   schedule:
     - cron: "20 6 * * *"
-  workflow_dispatch:        # lets you run it by hand from the Actions tab
+  workflow_dispatch:
   push:
     branches: [main]
     paths:
       - "scripts/**"
       - "data/**"
-      - "planning-from-notices.csv"   # the only place the 91 deadlines live
+      - "planning-from-notices.csv"
 
 permissions:
   contents: read
@@ -33,29 +33,28 @@ jobs:
           python-version: "3.12"
       # No pip install step: every script is standard library only.
 
+      # ---- roads ------------------------------------------------------
       - name: Fetch current traffic orders
         run: python3 scripts/traffic_ingest.py
 
-      - name: Check the traffic feed actually returned something
-        # A silent empty result is the failure mode that would quietly
-        # publish a page claiming nothing is open. Zero schemes open is
-        # legitimate; zero records is not.
+      - name: Check the traffic feed returned something
+        # A silent empty result would publish a page claiming nothing is
+        # open. Zero schemes open is legitimate; zero records is not.
         run: |
           f=$(ls -1 traffic_probe/traffic-geometry-*.geojson 2>/dev/null | tail -1)
           if [ -z "$f" ]; then
-            echo "::error::No geometry file was produced — Traffweb may have changed"
+            echo "::error::No geometry file produced — Traffweb may have changed"
             exit 1
           fi
-          n=$(python3 -c "import json,sys;print(len(json.load(open('$f'))['features']))")
+          n=$(python3 -c "import json;print(len(json.load(open('$f'))['features']))")
           echo "$n restriction records"
-          if [ "$n" -lt 1 ]; then
-            echo "::error::Traffweb returned no records at all"
-            exit 1
-          fi
+          [ "$n" -ge 1 ] || { echo "::error::Traffweb returned no records"; exit 1; }
 
-      # The planning source is Hackney's weekly consultation sheets. They
-      # carry no comment deadline, so the deadlines established from the
-      # printed notices are merged back in by reference.
+      # ---- planning ---------------------------------------------------
+      # The source is Hackney's weekly consultation sheets, not the printed
+      # notices. The sheets carry no comment deadline, so the deadlines
+      # established from the printed notices are merged back in by
+      # reference from planning-from-notices.csv, which is committed.
       - name: Fetch the council's weekly consultation sheets
         run: python3 scripts/fetch_weekly_lists.py --weeks 12
 
@@ -73,6 +72,7 @@ jobs:
           d=$(python3 -c "import csv;print(sum(1 for r in csv.DictReader(open('planning-applications.csv')) if r['comment_deadline']))")
           echo "$d of them carry a published comment deadline"
 
+      # ---- page -------------------------------------------------------
       - name: Build the page
         run: |
           mkdir -p public
@@ -85,16 +85,9 @@ jobs:
           cp CNAME public/CNAME 2>/dev/null || true
           ls -la public
 
-      - name: Deploy to Cloudflare
-        uses: cloudflare/wrangler-action@v3
-        with:
-          wranglerVersion: "4.151.3"
-          apiToken: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-
-      - name: Keep the data files for inspection
-        # Handy when a figure on the page looks wrong: the exact inputs for
-        # every build are downloadable from the run for 14 days.
+      - name: Keep the inputs for inspection
+        # When a figure on the page looks wrong, the exact inputs for every
+        # build are downloadable from the run for 14 days.
         uses: actions/upload-artifact@v4
         with:
           name: build-data
@@ -104,3 +97,14 @@ jobs:
             traffic_probe/*.geojson
             weekly_lists/*.csv
             planning-applications.csv
+
+      # ---- publish ----------------------------------------------------
+      # Cloudflare holds its own copy of the files; GitHub is the engine,
+      # not the host. If this step fails the run must go red, or a green
+      # tick would mean a build that never reached anyone.
+      - name: Publish to Cloudflare
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy
