@@ -801,7 +801,7 @@ TEMPLATE = """<!--kg-card-begin: html-->
 .hkob .toggle button[aria-pressed=true]{{background:var(--brand);color:#fff}}
 .hkob .count{{font-size:.95em;color:var(--quiet);padding:.35em 0 .9em;
   border-bottom:1px solid var(--rule);margin-bottom:1em}}
-.hkob .count b{{color:var(--ink)}}
+.hkob .count b{{color:var(--ink);font-weight:400}}
 .hkob .mapwrap{{position:relative;border:1px solid var(--rule);
   border-radius:14px;overflow:hidden;background:#f7f6f3}}
 .hkob .mapwrap svg{{display:block;width:100%;height:auto}}
