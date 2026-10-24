@@ -16,7 +16,7 @@ on:
       - "planning-from-notices.csv"
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: publish
@@ -34,54 +34,16 @@ jobs:
       # No pip install step: every script is standard library only.
 
       # ---- roads ------------------------------------------------------
-      - name: Fetch current traffic orders
-        run: python3 scripts/traffic_ingest.py
+      - name: Rebuild and check
+        # weekly.sh fetches roads and planning separately, falls back on
+        # last-good/ if either fails, and fails the run if it has to.
+        run: bash scripts/weekly.sh
 
-      - name: Check the traffic feed returned something
-        # A silent empty result would publish a page claiming nothing is
-        # open. Zero schemes open is legitimate; zero records is not.
-        run: |
-          f=$(ls -1 traffic_probe/traffic-geometry-*.geojson 2>/dev/null | tail -1)
-          if [ -z "$f" ]; then
-            echo "::error::No geometry file produced — Traffweb may have changed"
-            exit 1
-          fi
-          n=$(python3 -c "import json;print(len(json.load(open('$f'))['features']))")
-          echo "$n restriction records"
-          [ "$n" -ge 1 ] || { echo "::error::Traffweb returned no records"; exit 1; }
-
-      # ---- planning ---------------------------------------------------
-      # The source is Hackney's weekly consultation sheets, not the printed
-      # notices. The sheets carry no comment deadline, so the deadlines
-      # established from the printed notices are merged back in by
-      # reference from planning-from-notices.csv, which is committed.
-      - name: Fetch the council's weekly consultation sheets
-        run: python3 scripts/fetch_weekly_lists.py --weeks 12
-
-      - name: Build the planning rows
-        run: |
-          python3 scripts/parse_weekly_lists.py \
-            --deadlines planning-from-notices.csv \
-            --out planning-applications.csv
-
-      - name: Check the planning data looks sane
-        run: |
-          n=$(python3 -c "import csv;print(sum(1 for _ in csv.DictReader(open('planning-applications.csv'))))")
-          echo "$n planning applications"
-          [ "$n" -ge 50 ] || { echo "::error::Too few applications — the council's sheets may have moved or changed shape"; exit 1; }
-          d=$(python3 -c "import csv;print(sum(1 for r in csv.DictReader(open('planning-applications.csv')) if r['comment_deadline']))")
-          echo "$d of them carry a published comment deadline"
-
-      # ---- page -------------------------------------------------------
-      - name: Build the page
+      - name: Assemble what Cloudflare will serve
         run: |
           mkdir -p public
-          DATA="--wards data/hackney-wards.json \
-                --roads data/hackney-roads.json \
-                --postcodes data/hackney-postcodes.json"
-          python3 scripts/build_objections_page.py --fullpage $DATA \
-            --out public/index.html
-          python3 scripts/build_objections_page.py $DATA --out public/card.html
+          cp scripts/objections.html public/index.html
+          cp scripts/hackney.pmtiles public/
           cp CNAME public/CNAME 2>/dev/null || true
           ls -la public
 
@@ -93,10 +55,11 @@ jobs:
           name: build-data
           retention-days: 14
           path: |
-            traffic_probe/*.csv
-            traffic_probe/*.geojson
-            weekly_lists/*.csv
-            planning-applications.csv
+            scripts/traffic_probe/*.csv
+            scripts/traffic_probe/*.geojson
+            scripts/weekly_lists/*.csv
+            scripts/planning-applications.csv
+            scripts/fallbacks.txt
 
       # ---- publish ----------------------------------------------------
       # Cloudflare holds its own copy of the files; GitHub is the engine,
@@ -105,6 +68,6 @@ jobs:
       - name: Publish to Cloudflare
         uses: cloudflare/wrangler-action@v3
         with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          wranglerVersion: "4.151.3"
+          apiToken: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: deploy
