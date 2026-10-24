@@ -1107,7 +1107,7 @@ a:hover,a:focus{{color:var(--ink);text-decoration-thickness:2px}}
 .nodl-toggle b{{color:var(--ink)}}
 .count{{font-size:.93rem;color:var(--quiet);padding-bottom:.8rem;
   border-bottom:1px solid var(--rule);margin-bottom:1rem}}
-.count b{{color:var(--ink)}}
+.count b{{color:var(--ink);font-weight:400}}
 .sel{{border-left:4px solid var(--rule);padding:.1rem 0 .1rem .8rem;
   margin:0 0 1.2rem}}
 .sel .tag{{display:inline-block;font-size:.7rem;letter-spacing:.06em;
