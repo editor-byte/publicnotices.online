@@ -13,11 +13,29 @@ actually applies to it.
 Inputs, all British National Grid:
   hackney-wards.json          21 wards, GLA/ONS
   hackney-roads.json          street network, OS Open Roads (optional)
+  hackney-landmarks.json      schools, churches, town hall and so on,
+                              from make_buildings.py (optional)
   hackney-postcodes.json      postcode centroids, OS Code-Point Open
   planning-applications.csv   from parse_planning.py
   traffic_probe/traffic-geometry-*.geojson   from traffic_ingest.py
 
-Output: objections-card.html, a self-contained Ghost HTML card.
+Output: objections-card.html, a self-contained Ghost HTML card, or with
+--fullpage, objections.html, a standalone page.
+
+The full page is drawn with MapLibre on a Protomaps base map: streets,
+street names, parks, water and ordinary buildings all come from
+hackney.pmtiles, a Hackney extract of the Protomaps OpenStreetMap build,
+so hackney-roads.json and hackney-buildings.json are not used for it. Put
+hackney.pmtiles on the server beside objections.html, or pass --tiles-url
+with wherever it lives. Make or refresh it with the pmtiles tool:
+
+    pmtiles extract https://build.protomaps.com/YYYYMMDD.pmtiles \
+        hackney.pmtiles --bbox=-0.115,51.512,-0.01,51.582 --maxzoom=15
+
+The wards, the landmark tints, the road schemes and the markers are drawn
+on top of it from this script's own data, as before. The page has to be
+opened over HTTP (python3 -m http.server, or the live site), not by
+double-clicking the file, because the base map is read in pieces.
 
 Only items still open for objection are mapped. Closed ones stay in the
 List view, faded. Status is recomputed in the reader's browser, so a page
@@ -82,6 +100,22 @@ ROUNDUP = {
 }
 TRAFFIC_ROUNDUP = "https://hackneycitizen.co.uk/2026/10/17/road-changes-near-you-171026/"
 TRAFFWEB = "https://hackney.traffweb.app/traffweb/2/PublicConsultation"
+
+# Landmark fills: quiet tints of the land colour, so a school or a church
+# reads as a different kind of building without competing with the
+# markers, which keep the strong colours.
+LANDMARK_FILL = {
+    "Education": "#d6cba6",
+    "Religious Buildings": "#cfc0b3",
+    "Medical Care": "#bdd0ca",
+    "Cultural Facility": "#d0bfcd",
+    "Retail": "#d9c9b0",
+    "Sports Or Exercise Facility": "#c3d0b2",
+    "Emergency Service": "#d8b9b0",
+    "Road Transport": "#c9c9c4",
+    "Civic": "#bcc3d6",
+}
+LANDMARK_FALLBACK = "#d2ccbd"
 
 MANUAL_PLACE = {
     # "2026/1916": (533250, 187450),   # Woodberry Down Phase 5
@@ -225,6 +259,227 @@ def wgs84_to_osgb(lat_deg, lon_deg):
             I + II*dl**2 + III*dl**4 + IIIA*dl**6)
 
 
+def osgb_to_wgs84(e, n):
+    """British National Grid easting and northing to WGS84 longitude and
+    latitude, the reverse of wgs84_to_osgb and using the same Helmert
+    transformation, so everything converted either way lines up."""
+    a, b = 6377563.396, 6356256.909
+    F0 = 0.9996012717
+    lat0, lon0 = math.radians(49), math.radians(-2)
+    N0, E0 = -100000.0, 400000.0
+    e2 = 1 - (b*b)/(a*a)
+    nn = (a-b)/(a+b)
+    lat, M = lat0, 0.0
+    while True:
+        lat = (n - N0 - M)/(a*F0) + lat
+        Ma = (1+nn+1.25*nn**2+1.25*nn**3)*(lat-lat0)
+        Mb = (3*nn+3*nn**2+2.625*nn**3)*math.sin(lat-lat0)*math.cos(lat+lat0)
+        Mc = (1.875*nn**2+1.875*nn**3)*math.sin(2*(lat-lat0))*math.cos(2*(lat+lat0))
+        Md = (35/24)*nn**3*math.sin(3*(lat-lat0))*math.cos(3*(lat+lat0))
+        M = b*F0*(Ma-Mb+Mc-Md)
+        if abs(n - N0 - M) < 0.00001:
+            break
+    sl, cl, tl = math.sin(lat), math.cos(lat), math.tan(lat)
+    nu = a*F0/math.sqrt(1-e2*sl*sl)
+    rho = a*F0*(1-e2)/(1-e2*sl*sl)**1.5
+    eta2 = nu/rho - 1
+    VII = tl/(2*rho*nu)
+    VIII = tl/(24*rho*nu**3)*(5+3*tl**2+eta2-9*tl**2*eta2)
+    IX = tl/(720*rho*nu**5)*(61+90*tl**2+45*tl**4)
+    X = 1/(cl*nu)
+    XI = 1/(cl*6*nu**3)*(nu/rho+2*tl**2)
+    XII = 1/(cl*120*nu**5)*(5+28*tl**2+24*tl**4)
+    XIIA = 1/(cl*5040*nu**7)*(61+662*tl**2+1320*tl**4+720*tl**6)
+    dE = e - E0
+    lat = lat - VII*dE**2 + VIII*dE**4 - IX*dE**6
+    lon = lon0 + X*dE - XI*dE**3 + XII*dE**5 - XIIA*dE**7
+    # OSGB36 to WGS84: the forward transformation's parameters, negated.
+    sl, cl = math.sin(lat), math.cos(lat)
+    v = a/math.sqrt(1 - e2*sl*sl)
+    x1, y1, z1 = v*cl*math.cos(lon), v*cl*math.sin(lon), (1-e2)*v*sl
+    tx, ty, tz = -446.448, 125.157, -542.060
+    s = 20.4894e-6
+    rx = math.radians(-0.1502/3600); ry = math.radians(-0.2470/3600)
+    rz = math.radians(-0.8421/3600)
+    x2 = tx + x1*(1+s) - y1*rz + z1*ry
+    y2 = ty + x1*rz + y1*(1+s) - z1*rx
+    z2 = tz - x1*ry + y1*rx + z1*(1+s)
+    a2, b2 = 6378137.000, 6356752.3142
+    e22 = 1 - (b2*b2)/(a2*a2)
+    p = math.sqrt(x2*x2 + y2*y2)
+    lat = math.atan2(z2, p*(1-e22))
+    for _ in range(12):
+        v = a2/math.sqrt(1 - e22*math.sin(lat)**2)
+        lat = math.atan2(z2 + e22*v*math.sin(lat), p)
+    return math.degrees(math.atan2(y2, x2)), math.degrees(lat)
+
+
+def ll_ring(ring):
+    """A ring in grid metres as [lon, lat] pairs, rounded to about 10 cm."""
+    out = []
+    for e, n in ring:
+        lon, lat = osgb_to_wgs84(e, n)
+        out.append([round(lon, 6), round(lat, 6)])
+    return out
+
+
+def signed_area(ring):
+    return sum(ring[i][0]*ring[i+1][1] - ring[i+1][0]*ring[i][1]
+               for i in range(len(ring) - 1)) / 2
+
+
+def borough_outline(wards):
+    """
+    Hackney's outer edge, for the dark line round the borough and the hole
+    in the veil. First by dropping every edge two wards share, which is
+    exact when neighbours share their boundary points; otherwise by tracing
+    round the wards painted onto a fine grid. Returns (rings, how), or
+    (None, reason) if neither works.
+    """
+    key = lambda p: (round(p[0], 1), round(p[1], 1))
+    edges = collections.Counter()
+    total = 0.0
+    for w in wards:
+        for ring in w["rings"]:
+            total += ring_area(ring)
+            for i in range(len(ring) - 1):
+                a, b = key(ring[i]), key(ring[i+1])
+                if a != b:
+                    edges[frozenset((a, b))] += 1
+    # Hackney is one piece, so a true outline is one ring that encloses
+    # all the wards' area. Wards whose borders do not match come back as
+    # their own separate rings instead, and fail this.
+    rings = _chain(tuple(e) for e, c in edges.items() if c % 2)
+    if rings:
+        big = max(rings, key=ring_area)
+        if abs(ring_area(big) - total) <= 0.01*total:
+            return [big], "traced from the wards"
+    rings = _raster_outline(wards)
+    if rings and abs(ring_area(rings[0]) - total) <= 0.03*total:
+        return rings, "traced round the wards on a 4-metre grid"
+    return None, ("could not be traced" if not rings else
+                  f"traced, but its area is {ring_area(rings[0])/total:.0%} "
+                  f"of the wards'")
+
+
+def _chain(edges):
+    """Closed rings from a set of undirected edges, every point of which
+    joins an even number of them."""
+    adj = collections.defaultdict(list)
+    for a, b in edges:
+        adj[a].append(b)
+        adj[b].append(a)
+    if not adj or any(len(v) % 2 for v in adj.values()):
+        return None
+    used, rings = set(), []
+    for start in list(adj):
+        while any(frozenset((start, q)) not in used for q in adj[start]):
+            ring, cur = [start], start
+            while True:
+                nxt = next((q for q in adj[cur]
+                            if frozenset((cur, q)) not in used), None)
+                if nxt is None:
+                    return None
+                used.add(frozenset((cur, nxt)))
+                ring.append(nxt)
+                cur = nxt
+                if cur == start:
+                    break
+            rings.append(ring)
+    return rings
+
+
+def _simplify(pts, tol):
+    """Douglas-Peucker on an open run of points."""
+    if len(pts) < 3:
+        return pts
+    (x1, y1), (x2, y2) = pts[0], pts[-1]
+    dx, dy = x2 - x1, y2 - y1
+    L = math.hypot(dx, dy) or 1e-9
+    best, idx = -1.0, 0
+    for i in range(1, len(pts) - 1):
+        d = abs(dy*(pts[i][0]-x1) - dx*(pts[i][1]-y1)) / L
+        if d > best:
+            best, idx = d, i
+    if best <= tol:
+        return [pts[0], pts[-1]]
+    return _simplify(pts[:idx+1], tol)[:-1] + _simplify(pts[idx:], tol)
+
+
+def _raster_outline(wards, cell=4.0, close=2):
+    """
+    Hackney's outer edge when the wards' shared borders do not match point
+    for point: paint every ward onto a grid of 4-metre cells, close any
+    hairline gaps between neighbours, then trace round what is painted.
+    Accurate to a few metres, which at the closest zoom is a pixel or two.
+    """
+    xs = [p[0] for w in wards for r in w["rings"] for p in r]
+    ys = [p[1] for w in wards for r in w["rings"] for p in r]
+    pad = close + 2
+    x0, y0 = min(xs) - pad*cell, min(ys) - pad*cell
+    nx = int((max(xs) - x0)/cell) + pad + 1
+    ny = int((max(ys) - y0)/cell) + pad + 1
+    rows = [0]*ny                      # one int per row, a bit per cell
+    for w in wards:
+        for ring in w["rings"]:
+            ring_rows = [0]*ny
+            ylo = max(0, int((min(p[1] for p in ring) - y0)/cell))
+            yhi = min(ny - 1, int((max(p[1] for p in ring) - y0)/cell) + 1)
+            edges = [(ring[i], ring[i+1]) for i in range(len(ring) - 1)]
+            for j in range(ylo, yhi + 1):
+                yc = y0 + (j + .5)*cell
+                hits = sorted(a[0] + (yc - a[1])*(b[0] - a[0])/(b[1] - a[1])
+                              for a, b in edges if (a[1] > yc) != (b[1] > yc))
+                for k in range(0, len(hits) - 1, 2):
+                    c0 = max(0, int((hits[k] - x0)/cell + .5))
+                    c1 = min(nx, int((hits[k+1] - x0)/cell + .5))
+                    if c1 > c0:
+                        ring_rows[j] ^= ((1 << (c1 - c0)) - 1) << c0
+            for j in range(ny):
+                rows[j] |= ring_rows[j]
+    full = (1 << nx) - 1
+    def grow(r):
+        r = [(v | v << 1 | v >> 1) & full for v in r]
+        return [r[j] | (r[j-1] if j else 0) | (r[j+1] if j < ny-1 else 0)
+                for j in range(ny)]
+    def shrink(r):
+        r = [v & (v << 1) & (v >> 1) for v in r]
+        return [r[j] & (r[j-1] if j else 0) & (r[j+1] if j < ny-1 else 0)
+                for j in range(ny)]
+    for _ in range(close):
+        rows = grow(rows)
+    for _ in range(close):
+        rows = shrink(rows)
+    # Cell edges with painted on one side and not the other.
+    edges = []
+    for j in range(ny):
+        v = rows[j] ^ (rows[j] << 1)           # vertical edges in this row
+        while v:
+            i = (v & -v).bit_length() - 1
+            edges.append(((i, j), (i, j + 1)))
+            v &= v - 1
+        h = rows[j] ^ (rows[j+1] if j < ny - 1 else 0)   # above this row
+        while h:
+            i = (h & -h).bit_length() - 1
+            edges.append(((i, j + 1), (i + 1, j + 1)))
+            h &= h - 1
+        if j == 0:
+            h = rows[0]
+            while h:
+                i = (h & -h).bit_length() - 1
+                edges.append(((i, 0), (i + 1, 0)))
+                h &= h - 1
+    rings = _chain(edges)
+    if not rings:
+        return None
+    ring = max(rings, key=lambda r: ring_area(r))     # Hackney is one piece
+    # A closed ring starts and ends at the same point, so simplify it as
+    # two runs, split at the point farthest from the start.
+    far = max(range(len(ring)), key=lambda i: math.dist(ring[0], ring[i]))
+    ring = _simplify(ring[:far+1], 0.75)[:-1] + _simplify(ring[far:], 0.75)
+    return [[[x0 + i*cell, y0 + j*cell] for i, j in ring]]
+
+
 def ring_area(ring):
     a = 0.0
     for i in range(len(ring) - 1):
@@ -363,6 +618,14 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--wards", default="hackney-wards.json")
     ap.add_argument("--roads", default="hackney-roads.json")
+    ap.add_argument("--landmarks", default="hackney-landmarks.json")
+    ap.add_argument("--buildings-url", default="hackney-buildings.json",
+                    help="where readers' browsers fetch the ordinary "
+                         "buildings from, relative to the page or absolute")
+    ap.add_argument("--tiles-url", default="hackney.pmtiles",
+                    help="where readers' browsers fetch the Protomaps base "
+                         "map from, relative to the page or absolute "
+                         "(full page only)")
     ap.add_argument("--postcodes", default="hackney-postcodes.json")
     ap.add_argument("--planning", default="planning-applications.csv")
     ap.add_argument("--traffic", default=None)
@@ -427,6 +690,21 @@ def main():
             pts = [proj(x, y) for x, y in ring]
             ward_d.append("M" + " L".join(f"{x},{y}" for x, y in pts) + " Z")
 
+    # The same wards in longitude and latitude, for the full page's map.
+    ward_lines = [ll_ring(ring) for w in wards for ring in w["rings"]]
+    lons = [p[0] for r in ward_lines for p in r]
+    lats = [p[1] for r in ward_lines for p in r]
+    bounds = [[min(lons), min(lats)], [max(lons), max(lats)]]
+    outline, how = borough_outline(wards)
+    holes = [ll_ring(r) for r in outline] if outline else ward_lines
+    # The veil covers everything outside the borough: a large box with
+    # Hackney cut out of it. A hole has to wind the other way from the box,
+    # or the map fills it in.
+    box = [[-1.5, 50.9], [1.4, 50.9], [1.4, 52.2], [-1.5, 52.2], [-1.5, 50.9]]
+    veil_rings = [box] + [h if signed_area(h) < 0 else h[::-1] for h in holes]
+    print("borough outline: " + (how if outline else
+          how + ", using each ward instead"))
+
     byw = collections.defaultdict(list)
     named = []
     for r in roads:
@@ -482,6 +760,57 @@ def main():
         print(f"{len(road_labels)} street labels from {len(named)} "
               f"named segments ({len(roads)} segments total)")
 
+    # --- buildings ---
+    # Footprints are written in whole metres from a corner of the map and
+    # put in place by a single transform, so the reader's browser can draw
+    # the fetched buildings file exactly as it is, without knowing anything
+    # about the projection.
+    bx0, by0 = math.floor(minx), math.floor(miny)
+    bld_tf = (f"matrix({s:.7f} 0 0 {-s:.7f} {ox + (bx0-minx)*s:.3f} "
+              f"{H - oy - (by0-miny)*s:.3f})")
+
+    def ring_d(ring):
+        return "M" + " ".join(f"{round(x-bx0)} {round(y-by0)}"
+                              for x, y in ring[:-1]) + "Z"
+
+    landmark_svg = landmark_label_svg = ""
+    landmark_feats = []
+    if pathlib.Path(args.landmarks).exists():
+        lmdata = json.load(open(args.landmarks))
+        lrings = lmdata["buildings"]
+        bytheme = collections.defaultdict(list)
+        biggest = {}
+        for idx, theme, _cls, name in lmdata.get("landmarks", []):
+            ring = lrings[idx]
+            bytheme[theme or ""].append(ring_d(ring))
+            landmark_feats.append({
+                "type": "Feature",
+                "properties": {"f": LANDMARK_FILL.get(theme or "", LANDMARK_FALLBACK),
+                               "t": theme or ""},
+                "geometry": {"type": "Polygon", "coordinates": [ll_ring(ring)]}})
+            if name:
+                a = ring_area(ring)
+                if name not in biggest or a > biggest[name][0]:
+                    biggest[name] = (a, ring)
+        landmark_svg = "".join(
+            f'<path class="lm" fill="{LANDMARK_FILL.get(t, LANDMARK_FALLBACK)}" '
+            f'd="{"".join(ds)}"><title>{html.escape(t)}</title></path>'
+            for t, ds in sorted(bytheme.items()))
+        # One label per name, on its largest footprint, skipping any that
+        # would land on top of one already placed.
+        placed, lm_labels = [], []
+        for name, (_a, ring) in sorted(biggest.items(), key=lambda t: -t[1][0]):
+            cx, cy = proj(*ring_centroid(ring))
+            if any(math.hypot(cx-px, cy-py) < 9 for px, py in placed):
+                continue
+            placed.append((cx, cy))
+            lm_labels.append(
+                f'<text class="ll" x="0" y="0" '
+                f'transform="translate({cx},{cy})">{html.escape(name)}</text>')
+        landmark_label_svg = "".join(lm_labels)
+        print(f"{sum(len(v) for v in bytheme.values())} landmark footprints, "
+              f"{len(lm_labels)} labelled")
+
     pins, detail, pid = [], {}, 0
     plan_sections, traffic_sections = [], []
 
@@ -525,12 +854,14 @@ def main():
             continue                      # closed: list only
         pid += 1
         px, py = proj(*grp["at"])
+        plon, plat = osgb_to_wgs84(*grp["at"])
         cats = [r["category"] for r in live]
         top = collections.Counter(cats).most_common(1)[0][0]
         colour = CAT_COLOUR.get(top, CAT_FALLBACK)
         dls = [r["comment_deadline"] for r in live if r["comment_deadline"]]
         deadline = min(dls) if dls else ""
         pins.append({"id": pid, "x": px, "y": py, "tx": px, "ty": py,
+                     "lon": round(plon, 6), "lat": round(plat, 6),
                      "n": len(live), "c": colour, "kind": "planning",
                      "close": deadline, "glyph": CAT_GLYPH.get(top, "house")})
         detail[pid] = {
@@ -587,32 +918,41 @@ def main():
         schemes.setdefault(f["properties"].get("order_ref", "?"), []).append(f)
 
     lines = []
+    line_feats = []
     for ref, fs in schemes.items():
         close = fs[0]["properties"].get("date_close", "")
         advert = fs[0]["properties"].get("date_advert", "")
-        seg, bystreet = [], collections.OrderedDict()
+        seg, seg_ll, bystreet = [], [], collections.OrderedDict()
         for f in fs:
             p = f["properties"]
             st = (p.get("street_name") or "").title()
             g = f["geometry"]
             parts = ([g["coordinates"]] if g["type"] == "LineString"
                      else g["coordinates"])
-            allp = []
+            allp, allll = [], []
             for part in parts:
+                if len(part) >= 2:
+                    allll += part
+                    seg_ll.append([[round(x, 6), round(y, 6)] for x, y in part])
                 pts = [proj(*wgs84_to_osgb(lat, lon)) for lon, lat in part]
                 if len(pts) >= 2:
                     allp += pts
                     seg.append("M" + " L".join(f"{x},{y}" for x, y in
                                                lengthen(pts, MIN_DRAW)))
-            rec = bystreet.setdefault(st, {"what": [], "pts": []})
+            rec = bystreet.setdefault(st, {"what": [], "pts": [], "ll": []})
             d = describe_traffic(p)
             if d and d not in rec["what"]:
                 rec["what"].append(d)
             rec["pts"] += allp
+            rec["ll"] += allll
 
         if close >= iso_today:
             lines.append(f'<path class="ln" stroke="{TRAFFIC_COLOUR["scheme"]}" '
                          f'd="{" ".join(seg)}"/>')
+            if seg_ll:
+                line_feats.append({"type": "Feature", "properties": {},
+                                   "geometry": {"type": "MultiLineString",
+                                                "coordinates": seg_ll}})
             for st, rec in bystreet.items():
                 if not rec["pts"]:
                     continue
@@ -620,8 +960,11 @@ def main():
                 cx = sum(p[0] for p in rec["pts"])/len(rec["pts"])
                 cy = sum(p[1] for p in rec["pts"])/len(rec["pts"])
                 gl = glyph_for(rec["what"])
+                llon = sum(p[0] for p in rec["ll"])/len(rec["ll"])
+                llat = sum(p[1] for p in rec["ll"])/len(rec["ll"])
                 pins.append({"id": pid, "x": cx, "y": cy,
                              "tx": round(cx, 1), "ty": round(cy, 1),
+                             "lon": round(llon, 6), "lat": round(llat, 6),
                              "n": len(rec["what"]), "c": TRAFFIC_COLOUR[gl],
                              "kind": "traffic", "close": close, "glyph": gl})
                 detail[pid] = {
@@ -658,6 +1001,7 @@ def main():
 
     obstacles = [(p["x"], p["y"]) for p in shown_first]
     labels = []
+    ward_label_ll = []
     for w in wards:
         big = max(w["rings"], key=ring_area)
         ring = [proj(x, y) for x, y in big]
@@ -667,6 +1011,13 @@ def main():
         px, py = round(pt[0], 1), round(pt[1], 1)
         name = w["name"].replace("&", "&amp;")
         words = name.split()
+        # Back from the drawing to the grid, then to longitude and latitude.
+        llon, llat = osgb_to_wgs84(minx + (pt[0] - ox)/s, miny + (H - oy - pt[1])/s)
+        ward_label_ll.append({
+            "lon": round(llon, 6), "lat": round(llat, 6),
+            "html": (" ".join(words[:len(words)//2 + len(words) % 2]) + "<br>" +
+                     " ".join(words[len(words)//2 + len(words) % 2:])
+                     if len(name) > 13 and len(words) > 1 else name)})
         if len(name) > 13 and len(words) > 1:
             mid = len(words)//2 + len(words) % 2
             labels.append(f'<text class="wl" x="{px}" y="{py-4}">'
@@ -694,6 +1045,8 @@ def main():
             count = f'<text y="4">{p["n"]}</text>'
         else:
             count = ""
+        p["svg"] = (f'<svg viewBox="-13 -13 26 26" width="26" height="26" '
+                    f'aria-hidden="true">{shape}{count}</svg>')
         pin_svg.append(
             f'<g class="pin {p["kind"]}{"" if p["close"] else " nodl"}" '
             f'data-id="{p["id"]}" '
@@ -739,12 +1092,34 @@ def main():
     card = tmpl.format(
         vieww=W, viewh=H, wardpath=" ".join(ward_d), roads=road_svg,
         roadlabels=road_label_svg,
+        landmarks=landmark_svg, landmarklabels=landmark_label_svg,
+        bldtransform=bld_tf, bldurl=json.dumps(args.buildings_url),
+        bx0=bx0, by0=by0,
         wardlabels="\n".join(labels), lines="\n".join(lines),
         pins="\n".join(pin_svg), legend=legend,
         planning="\n".join(plan_sections),
         traffic="\n".join(traffic_sections),
         unplaced=unplaced_html,
         detail=json.dumps(detail),
+        tilesurl=json.dumps(args.tiles_url),
+        mapdata=json.dumps({
+            "bounds": bounds,
+            "pins": [{"id": p["id"], "lon": p["lon"], "lat": p["lat"],
+                      "kind": p["kind"], "close": p["close"], "svg": p["svg"]}
+                     for p in pins],
+            "wardLabels": ward_label_ll,
+            "wards": {"type": "Feature", "properties": {},
+                      "geometry": {"type": "MultiLineString",
+                                   "coordinates": ward_lines}},
+            "outline": ({"type": "Feature", "properties": {},
+                         "geometry": {"type": "MultiLineString",
+                                      "coordinates": [ll_ring(r) for r in outline]}}
+                        if outline else None),
+            "veil": {"type": "Feature", "properties": {},
+                     "geometry": {"type": "Polygon", "coordinates": veil_rings}},
+            "lines": {"type": "FeatureCollection", "features": line_feats},
+            "landmarks": {"type": "FeatureCollection", "features": landmark_feats},
+        }, separators=(",", ":")),
         nplan=nplan, ntraffic=ntraffic,
         plan_closes=plan_closes, traffic_closes=traffic_closes,
         n_nodeadline=sum(1 for r in plan if not r['comment_deadline']),
@@ -1057,6 +1432,10 @@ TEMPLATE_PAGE = """<!DOCTYPE html>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;0,700;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@5.24.0/dist/maplibre-gl.css">
+<script src="https://cdn.jsdelivr.net/npm/maplibre-gl@5.24.0/dist/maplibre-gl.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pmtiles@4.5.0/dist/pmtiles.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@protomaps/basemaps@5.7.2/dist/basemaps.js"></script>
 <style>
 *,*::before,*::after{{box-sizing:border-box}}
 :root{{
@@ -1079,9 +1458,7 @@ body{{font-family:Lora,Georgia,'Times New Roman',serif;color:var(--ink);
   padding:1.5rem 1.4rem 3rem;border-right:1px solid var(--rule)}}
 .stage{{flex:1 1 auto;min-width:0;position:relative;
   background:var(--sea);overflow:hidden}}
-.stage svg{{position:absolute;inset:0;width:100%;height:100%;touch-action:none;
-  cursor:grab}}
-.stage svg.drag{{cursor:grabbing}}
+#map{{position:absolute;inset:0}}
 h1{{font-size:1.38rem;line-height:1.2;margin:0 0 .75rem;
   text-wrap:balance}}
 .standfirst{{margin:0 0 1.1rem;color:var(--quiet);font-size:.97rem}}
@@ -1151,36 +1528,14 @@ ul.rows{{list-style:none;padding:0;margin:0}}
 .currency b{{color:var(--ink)}}
 .foot{{margin-top:1rem;color:var(--quiet);font-size:.8rem}}
 .hide{{display:none}}
-.wards{{fill:var(--land);stroke:var(--wardline);stroke-width:.8;
-  stroke-linejoin:round;vector-effect:non-scaling-stroke}}
-.outline{{fill:none;stroke:var(--edge);stroke-width:2;stroke-linejoin:round;
-  vector-effect:non-scaling-stroke}}
-.veil{{fill:var(--sea);opacity:.74;pointer-events:none}}
-.rdc,.rdf{{fill:none;stroke-linecap:round;stroke-linejoin:round}}
-/* casings */
-.rdc1{{stroke:#d3d0c5;stroke-width:1.5}}
-.rdc2{{stroke:#c7c3b6;stroke-width:2.4}}
-.rdc3{{stroke:#b2ada0;stroke-width:3.4}}
-.rdc4{{stroke:#97928a;stroke-width:4.4}}
-/* fills */
-.rdf1{{stroke:#fafaf7;stroke-width:.85}}
-.rdf2{{stroke:#f7f4ec;stroke-width:1.5}}
-.rdf3{{stroke:#ffffff;stroke-width:2.2}}
-.rdf4{{stroke:#ffffff;stroke-width:3.0}}
-.wl{{font-size:11px;fill:#6f6a52;text-anchor:middle;
-  font-family:Lora,Georgia,serif;paint-order:stroke;stroke:var(--land);
-  stroke-width:3px;stroke-linejoin:round;pointer-events:none}}
-.ln{{fill:none;stroke-width:2.5;stroke-linecap:round;opacity:.45;
-  vector-effect:non-scaling-stroke}}
-/* Street labels: hidden until the reveal bands below switch them on. */
-.rl{{font-family:Lora,Georgia,serif;fill:#5b5b57;font-size:9px;
-  paint-order:stroke;stroke:var(--land);stroke-width:2.6px;
-  stroke-linejoin:round;pointer-events:none;display:none}}
-.rl3,.rl4{{fill:#3d352b}}
-svg[data-k="2"] .rl3,svg[data-k="2"] .rl4,
-svg[data-k="3"] .rl2,svg[data-k="3"] .rl3,svg[data-k="3"] .rl4,
-svg[data-k="4"] .rl{{display:inline}}
-.pin{{cursor:pointer}}
+/* Ward names: drawn over the map in the page's own typeface, and taken
+   away once the reader is close enough to read street names instead. */
+.wl{{font-size:12px;color:#6f6a52;text-align:center;line-height:1.15;
+  font-family:Lora,Georgia,serif;pointer-events:none;white-space:nowrap;
+  text-shadow:0 0 3px var(--land),0 0 3px var(--land),0 0 2px var(--land)}}
+.stage[data-near] .wl{{display:none}}
+.pin{{cursor:pointer;width:26px;height:26px}}
+.pin svg{{display:block;overflow:visible}}
 .pin circle,.pin rect{{stroke:#fafaf7;stroke-width:2;
   vector-effect:non-scaling-stroke}}
 .pin text{{fill:#fafaf7;font-size:11px;font-weight:600;text-anchor:middle;
@@ -1194,7 +1549,7 @@ svg[data-k="4"] .rl{{display:inline}}
   stroke:var(--ink);stroke-width:3.5}}
 .pin.on circle,.pin.on rect{{stroke:var(--ink);stroke-width:3}}
 .zoom{{position:absolute;right:14px;top:14px;display:flex;flex-direction:column;
-  gap:.3rem}}
+  gap:.3rem;z-index:5}}
 .zoom button{{font:inherit;width:2.1rem;height:2.1rem;border-radius:8px;
   border:1px solid var(--rule);background:#fff;color:var(--ink);
   cursor:pointer;font-size:1rem;line-height:1}}
@@ -1219,9 +1574,10 @@ svg[data-k="4"] .rl{{display:inline}}
 .mcard .x{{position:absolute;right:.5rem;top:.4rem;border:0;background:none;
   font:inherit;font-size:1.2rem;line-height:1;color:var(--quiet);
   cursor:pointer;padding:.2rem .4rem}}
-.hint{{position:absolute;left:14px;bottom:14px;background:var(--paper);
+.hint{{position:absolute;left:14px;bottom:14px;z-index:4;background:var(--paper);
   border-radius:999px;padding:.4rem .9rem;font-size:.82rem;color:var(--quiet);
   box-shadow:0 2px 8px rgba(0,0,0,.1)}}
+.maplibregl-ctrl-attrib{{font-family:Lora,Georgia,serif;font-size:.72rem}}
 @media (max-width:1100px){{
   .panel{{flex:0 0 20rem;max-width:20rem}}
 }}
@@ -1237,8 +1593,10 @@ svg[data-k="4"] .rl{{display:inline}}
   /* The masthead is full-bleed in the panel, so it needs no negative top
      margin once the map sits above it. */
   .masthead{{margin:-1.1rem -1.4rem 1.2rem}}
-  .mcard{{position:static;width:auto;margin:.8rem;max-height:none;
-    box-shadow:none;border:1px solid var(--rule)}}
+  /* Over the bottom of the map, where a reader can see it without
+     scrolling away from the marker they tapped. */
+  .mcard{{left:.6rem;right:.6rem;bottom:.6rem;width:auto;max-height:70%;
+    box-shadow:0 6px 18px rgba(26,26,26,.22)}}
   .hint{{display:none}}
 }}
 </style>
@@ -1292,33 +1650,19 @@ svg[data-k="4"] .rl{{display:inline}}
    notice, 21 days from the date of that notice. The council’s own register
    shows when it intends to decide, not when you can object. Road changes
    from the council’s published traffic order data, retrieved {generated}.
-   Boundaries: GLA and ONS London ward boundaries. Roads and postcode
-   positions: OS Open Roads and OS Code-Point Open, &copy; Crown copyright
-   and database right, Open Government Licence v3. Markers sit at the
-   postcode, not the building, and are nudged apart where they would
-   overlap; a few sit at the centre of their ward because the council’s list
-   gives no postcode for them. Deadlines are checked against your
+   Boundaries: GLA and ONS London ward boundaries. Base map: Protomaps,
+   from &copy; OpenStreetMap contributors. Landmark buildings and postcode
+   positions: OS OpenMap Local and OS Code-Point Open, &copy; Crown
+   copyright and database right, Open Government Licence v3. Markers sit at
+   the postcode, not the building; a few sit at the centre of their ward
+   because the council’s list gives no postcode for them. Deadlines are checked against your
    device’s clock.</p>
 </aside>
 
 <main class="stage">
-  <svg id="map" viewBox="0 0 {vieww} {viewh}" preserveAspectRatio="xMidYMid meet"
-       role="img" aria-label="Map of Hackney and its wards showing planning
+  <div id="map" role="region" aria-label="Map of Hackney showing planning
        applications and road changes open for objection. Everything shown is
-       also listed in the panel.">
-    <g id="z">
-      <path class="outline" d="{wardpath}"/>
-      <path class="wards" d="{wardpath}"/>
-{roads}
-{roadlabels}
-      <path class="veil" fill-rule="evenodd"
-            d="M0,0 H{vieww} V{viewh} H0 Z {wardpath}"/>
-      <path class="outline" d="{wardpath}"/>
-{wardlabels}
-{lines}
-{pins}
-    </g>
-  </svg>
+       also listed in the panel."></div>
   <div class="zoom">
     <button id="zin" aria-label="Zoom in">+</button>
     <button id="zout" aria-label="Zoom out">−</button>
@@ -1331,6 +1675,7 @@ svg[data-k="4"] .rl{{display:inline}}
 <script>
 (function(){{
   var D={detail};
+  var M={mapdata};
   var today;
   try{{today=new Intl.DateTimeFormat('en-CA',{{timeZone:'Europe/London',
     year:'numeric',month:'2-digit',day:'2-digit'}}).format(new Date());}}
@@ -1339,7 +1684,104 @@ svg[data-k="4"] .rl{{display:inline}}
   // that it has passed.
   var shut=function(c){{return !!c && today>c;}};
   var $=function(id){{return document.getElementById(id);}};
-  var pins=[].slice.call(document.querySelectorAll('.pin'));
+
+  // ---- map ---------------------------------------------------------------
+  var protocol=new pmtiles.Protocol();
+  maplibregl.addProtocol('pmtiles',protocol.tile);
+  var tiles='pmtiles://'+new URL({tilesurl},location.href).href;
+  // The Protomaps light style, recoloured to the page: warm paper for land,
+  // quiet greens and blues, so the markers keep the strong colours.
+  var flavor=Object.assign({{}},basemaps.namedFlavor('light'),{{
+    background:'#f4f3ee', earth:'#eceae2', water:'#cfdcdd',
+    park_a:'#dee2cf', park_b:'#d7dcc5', wood_a:'#dee2cf', wood_b:'#d7dcc5',
+    scrub_a:'#e2e4d3', scrub_b:'#dde0cc', school:'#e6e0cc',
+    hospital:'#e6dcd6', industrial:'#e4e2da', pedestrian:'#efede6',
+    buildings:'#dcd8cc', railway:'#c4c0b5', boundaries:'#bcb8ad',
+    highway:'#ffffff', major:'#ffffff', link:'#ffffff',
+    minor_a:'#fafaf7', minor_b:'#fafaf7', minor_service:'#f6f4ee',
+    other:'#f6f4ee',
+    highway_casing_early:'#97928a', highway_casing_late:'#97928a',
+    major_casing_early:'#b2ada0', major_casing_late:'#b2ada0',
+    minor_casing:'#d3d0c5', minor_service_casing:'#d3d0c5',
+    roads_label_minor:'#5b5b57', roads_label_minor_halo:'#fafaf7',
+    roads_label_major:'#3d352b', roads_label_major_halo:'#fafaf7',
+    subplace_label:'#6f6a52', subplace_label_halo:'#eceae2',
+    address_label:'#8a867a', address_label_halo:'#eceae2'
+  }});
+  var map=new maplibregl.Map({{
+    container:'map',
+    bounds:M.bounds, fitBoundsOptions:{{padding:24}},
+    maxBounds:[[-0.16,51.49],[0.035,51.605]],
+    minZoom:10.5, maxZoom:19,
+    attributionControl:{{compact:true}},
+    dragRotate:false, pitchWithRotate:false, touchPitch:false,
+    style:{{
+      version:8,
+      glyphs:'https://protomaps.github.io/basemaps-assets/fonts/{{fontstack}}/{{range}}.pbf',
+      sprite:'https://protomaps.github.io/basemaps-assets/sprites/v4/light',
+      sources:{{
+        protomaps:{{type:'vector',url:tiles,
+          attribution:'<a href="https://protomaps.com">Protomaps</a> &copy; '+
+            '<a href="https://openstreetmap.org/copyright">OpenStreetMap</a>'}},
+        wards:{{type:'geojson',data:M.wards}},
+        outline:{{type:'geojson',data:M.outline||M.wards}},
+        veil:{{type:'geojson',data:M.veil}},
+        lines:{{type:'geojson',data:M.lines}},
+        landmarks:{{type:'geojson',data:M.landmarks}}
+      }},
+      layers:basemaps.layers('protomaps',flavor,{{lang:'en'}})
+    }}
+  }});
+  map.touchZoomRotate.disableRotation();
+  map.on('load',function(){{
+    // Landmark tints go under the base map's labels, so names stay
+    // readable; everything else goes on top.
+    var firstLabel=(map.getStyle().layers.filter(function(l){{
+      return l.type==='symbol';}})[0]||{{}}).id;
+    map.addLayer({{id:'landmarks',type:'fill',source:'landmarks',minzoom:13.5,
+      paint:{{'fill-color':['get','f'],'fill-opacity':.9}}}},firstLabel);
+    map.addLayer({{id:'veil',type:'fill',source:'veil',
+      paint:{{'fill-color':'#f4f3ee','fill-opacity':.74}}}});
+    map.addLayer({{id:'wards',type:'line',source:'wards',
+      paint:{{'line-color':'#a9a598','line-width':['interpolate',['linear'],
+        ['zoom'],11,.7,15,1.4],'line-dasharray':[3,2]}}}});
+    map.addLayer({{id:'outline',type:'line',source:'outline',
+      layout:{{'line-join':'round'}},
+      paint:{{'line-color':'#4a4a46','line-width':2}}}});
+    map.addLayer({{id:'lines',type:'line',source:'lines',
+      layout:{{'line-cap':'round','line-join':'round'}},
+      paint:{{'line-color':'#a8322a','line-opacity':.55,
+        'line-width':['interpolate',['linear'],['zoom'],11,2.5,16,6]}}}});
+  }});
+
+  // Ward names, in the page's own typeface rather than the map's.
+  M.wardLabels.forEach(function(w){{
+    var el=document.createElement('div');
+    el.className='wl'; el.innerHTML=w.html;
+    new maplibregl.Marker({{element:el}}).setLngLat([w.lon,w.lat]).addTo(map);
+  }});
+  var stage=document.querySelector('.stage');
+  function near(){{
+    if(map.getZoom()>=14.3) stage.setAttribute('data-near','');
+    else stage.removeAttribute('data-near');
+  }}
+  map.on('zoom',near); near();
+
+  // The markers are ordinary page elements, so they keep the page's
+  // styling, take keyboard focus and answer to the filters below.
+  var pins=M.pins.map(function(p){{
+    var el=document.createElement('div');
+    el.className='pin '+p.kind+(p.close?'':' nodl');
+    el.setAttribute('data-id',p.id);
+    el.setAttribute('data-close',p.close);
+    el.innerHTML=p.svg;
+    new maplibregl.Marker({{element:el}}).setLngLat([p.lon,p.lat]).addTo(map);
+    var d=D[p.id]||{{}};
+    el.setAttribute('tabindex','0');
+    el.setAttribute('role','button');
+    el.setAttribute('aria-label',(d.title||'')+', '+(d.sub||''));
+    return el;
+  }});
 
   document.querySelectorAll('.dl[data-close]').forEach(function(el){{
     el.textContent=el.getAttribute(shut(el.getAttribute('data-close'))
@@ -1397,88 +1839,23 @@ svg[data-k="4"] .rl{{display:inline}}
     }});
   }});
 
-  // svg, g and drag are declared before first use.
-  var svg=$('map'), g=$('z'), VW={vieww}, VH={viewh};
-  var drag=null;
-
-  // Clicks are detected here rather than on the markers: the pan code
-  // captures the pointer, which redirects the click away from whatever was
-  // under it. A pointerdown and pointerup within a few pixels is a click;
-  // anything further is a drag.
-  var downAt=null, downPin=null;
-  svg.addEventListener('pointerdown',function(e){{
-    downAt=[e.clientX,e.clientY];
-    downPin=e.target.closest ? e.target.closest('.pin') : null;
+  pins.forEach(function(p){{
+    p.addEventListener('click',function(e){{
+      e.stopPropagation(); show(p.getAttribute('data-id'),p);
+    }});
   }});
-  svg.addEventListener('pointerup',function(e){{
-    if(!downAt) return;
-    var moved=Math.hypot(e.clientX-downAt[0],e.clientY-downAt[1]);
-    downAt=null;
-    if(moved>5) return;
-    if(downPin) show(downPin.getAttribute('data-id'),downPin);
-    else hideCard();
+  // A click on the map itself, not on a marker, puts the card away.
+  map.on('click',function(e){{
+    var t=e.originalEvent&&e.originalEvent.target;
+    if(t&&t.closest&&t.closest('.pin')) return;
+    hideCard();
   }});
 
-  // ---- zoom and pan ----------------------------------------------------
-  var k=1, tx=0, ty=0;
-  function apply(){{
-    g.setAttribute('transform','translate('+tx+','+ty+') scale('+k+')');
-    // Markers and labels keep their size, so the map gets more detailed
-    // rather than merely bigger.
-    var inv=1/k;
-    pins.forEach(function(p){{
-      p.setAttribute('transform','translate('+p.getAttribute('data-x')+','+
-        p.getAttribute('data-y')+') scale('+inv+')');
-    }});
-    document.querySelectorAll('.wl').forEach(function(t){{
-      t.style.fontSize=(11*inv)+'px';
-      t.style.strokeWidth=(3*inv)+'px';
-    }});
-    // Street names appear in bands: main roads from 1.8x, B-roads from 2.6x,
-    // everything from 3.6x. Below that the borough is too small to read them.
-    var band = k>=3.6?'4':k>=2.6?'3':k>=1.8?'2':'1';
-    svg.setAttribute('data-k',band);
-    document.querySelectorAll('.rl').forEach(function(t){{
-      t.style.fontSize=(9*inv)+'px';
-      t.style.strokeWidth=(2.6*inv)+'px';
-    }});
-  }}
-  function clamp(){{
-    k=Math.max(1,Math.min(10,k));
-    var maxx=VW*(k-1), maxy=VH*(k-1);
-    tx=Math.max(-maxx,Math.min(0,tx)); ty=Math.max(-maxy,Math.min(0,ty));
-  }}
-  function zoomAt(cx,cy,factor){{
-    var k0=k; k=k0*factor; clamp();
-    var r=k/k0;
-    tx=cx-(cx-tx)*r; ty=cy-(cy-ty)*r; clamp(); apply();
-  }}
-  function svgPoint(evt){{
-    var r=svg.getBoundingClientRect();
-    var sx=VW/r.width, sy=VH/r.height, sc=Math.max(sx,sy);
-    return [(evt.clientX-r.left)*sc-(sc*r.width-VW)/2,
-            (evt.clientY-r.top)*sc-(sc*r.height-VH)/2];
-  }}
-  svg.addEventListener('wheel',function(e){{
-    e.preventDefault();
-    var p=svgPoint(e);
-    zoomAt(p[0],p[1],e.deltaY<0?1.18:1/1.18);
-  }},{{passive:false}});
-  svg.addEventListener('pointerdown',function(e){{
-    drag=svgPoint(e); svg.classList.add('drag'); svg.setPointerCapture(e.pointerId);
-  }});
-  svg.addEventListener('pointermove',function(e){{
-    if(!drag) return;
-    var p=svgPoint(e);
-    tx+=p[0]-drag[0]; ty+=p[1]-drag[1]; drag=p; clamp(); apply();
-  }});
-  ['pointerup','pointercancel','pointerleave'].forEach(function(ev){{
-    svg.addEventListener(ev,function(){{drag=null;svg.classList.remove('drag');}});
-  }});
-  $('zin').addEventListener('click',function(){{zoomAt(VW/2,VH/2,1.4);}});
-  $('zout').addEventListener('click',function(){{zoomAt(VW/2,VH/2,1/1.4);}});
+  // ---- zoom --------------------------------------------------------------
+  $('zin').addEventListener('click',function(){{map.zoomIn();}});
+  $('zout').addEventListener('click',function(){{map.zoomOut();}});
   $('zreset').addEventListener('click',function(){{
-    k=1;tx=0;ty=0;apply();
+    map.fitBounds(M.bounds,{{padding:24}});
   }});
 
   // ---- filters ---------------------------------------------------------
@@ -1529,7 +1906,6 @@ svg[data-k="4"] .rl{{display:inline}}
       refilter();
     }});
   }});
-  apply();
 }})();
 </script>
 </body>
