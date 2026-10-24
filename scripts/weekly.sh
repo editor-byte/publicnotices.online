@@ -81,7 +81,8 @@ fi
 # ---- the page -------------------------------------------------------------
 echo
 echo "== the page"
-python3 build_objections_page.py --fullpage --traffic "$TUSE" ||
+python3 build_objections_page.py --fullpage --traffic "$TUSE" \
+  --tiles-url "${TILES_URL:-hackney.pmtiles}" ||
   stop "the page could not be built"
 python3 weekly_check.py page || stop "the page failed its checks"
 
