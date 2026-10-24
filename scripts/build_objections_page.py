@@ -1451,7 +1451,7 @@ body{{font-family:Lora,Georgia,'Times New Roman',serif;color:var(--ink);
   background:var(--paper);line-height:1.5}}
 .masthead{{background:var(--brand);color:#fafaf7;margin:-1.5rem -1.4rem 1rem;
   padding:1.15rem 1.4rem 1.05rem}}
-.masthead h1{{color:#fafaf7;margin:0}}
+.masthead h1{{color:#fafaf7;margin:0;font-weight:400}}
 .shell{{display:flex;height:100%;align-items:stretch;
   max-width:100%}}
 .panel{{flex:0 0 25rem;max-width:25rem;min-width:0;overflow-y:auto;
