@@ -889,8 +889,20 @@ def main():
             } for r in live],
         }
 
-    for r in sorted(plan, key=lambda r: (r["comment_deadline"],
-                                         r["postcode_district"], r["reference"])):
+    # Open first, soonest deadline at the top, because that is what a
+    # reader can still act on. Then those with no published deadline,
+    # then the closed ones, which are kept as the record.
+    def list_order(r):
+        dl = r["comment_deadline"]
+        if dl and dl >= iso_today:
+            group, key = 0, dl                  # open, closing soonest
+        elif not dl:
+            group, key = 1, ""                  # no deadline published
+        else:
+            group, key = 2, dl                  # closed, most recent last
+        return (group, key, r["postcode_district"], r["reference"])
+
+    for r in sorted(plan, key=list_order):
         shut = r["comment_deadline"] < iso_today
         link = (f'<a href="{html.escape(r["register_url"])}" rel="noopener">'
                 f'{html.escape(r["reference"])}</a>' if r["register_url"]
@@ -1287,6 +1299,9 @@ def card_from_page(page):
 
 
 CARD_SHELL_CSS = """
+/* The blank template still renders the page title block; the
+   card carries its own heading, so hide it. */
+[data-page-hero]{display:none}
 /* A box in an article, not a window: the map takes a fixed height at the
    top and the panel runs beneath it, so a reader meets the map first. */
 .hcn-shell{display:flex;flex-direction:column;max-width:100%;
@@ -1315,7 +1330,7 @@ CARD_SHELL_CSS = """
   .hcn-shell{flex-direction:row;align-items:stretch;
     height:calc(100vh - 11rem);min-height:34rem;
     margin:1.5rem 0 1rem}
-  .hcn-shell .hcn-panel{order:0;flex:0 0 22rem;max-width:22rem;
+  .hcn-shell .hcn-panel{order:0;flex:0 0 27rem;max-width:27rem;
     overflow-y:auto;border-right:1px solid var(--rule)}
   .hcn-shell .hcn-stage{order:0;flex:1 1 auto;height:auto;border-bottom:0}
   .hcn-shell .hcn-mcard{position:absolute;left:16px;bottom:16px;
@@ -1920,13 +1935,31 @@ ul.rows{{list-style:none;padding:0;margin:0}}
   // the first fit is computed against the wrong width and the borough
   // ends up adrift in a wide card. Re-fit whenever the box changes size,
   // until the reader moves the map themselves.
+  // Fit the borough to the *width* of the box rather than fitting the
+  // whole of it inside: in a wide, short card the ordinary fit is limited
+  // by height and leaves Islington and Tower Hamlets filling the sides.
+  // This crops the top and bottom instead, which the reader can pan to.
+  function merc(lat){{ return Math.log(Math.tan(Math.PI/4+lat*Math.PI/360)); }}
+  function unmerc(y){{ return (Math.atan(Math.exp(y))-Math.PI/4)*360/Math.PI; }}
+  function fillBounds(animate){{
+    var b=M.bounds, w=b[0][0], s0=b[0][1], e=b[1][0], n=b[1][1];
+    var c=map.getContainer();
+    var box=c.clientWidth/Math.max(c.clientHeight,1);
+    var lon=(e-w)*Math.PI/180, y0=merc(s0), y1=merc(n), lat=y1-y0;
+    if(box>lon/lat){{                     // wider than the borough: crop it
+      var mid=(y0+y1)/2, half=lon/box/2;
+      s0=unmerc(mid-half); n=unmerc(mid+half);
+    }}
+    map.fitBounds([[w,s0],[e,n]],{{padding:0,animate:!!animate}});
+  }}
+
   var userMoved=false;
   map.on('dragstart',function(){{userMoved=true;}});
   map.on('zoomstart',function(e){{if(e.originalEvent) userMoved=true;}});
   if(window.ResizeObserver){{
     new ResizeObserver(function(){{
       map.resize();
-      if(!userMoved) map.fitBounds(M.bounds,{{padding:24,animate:false}});
+      if(!userMoved) fillBounds(false);
     }}).observe(map.getContainer());
   }}
 
