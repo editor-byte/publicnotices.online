@@ -1086,7 +1086,7 @@ def main():
                 '<p class="nopc">Not on the map, because the notice gives no '
                 'postcode:</p><ul class="nopc-list">' + rows + "</ul>")
 
-    tmpl = TEMPLATE_PAGE if args.fullpage else TEMPLATE
+    tmpl = TEMPLATE_PAGE if args.fullpage else card_from_page(TEMPLATE_PAGE)
     outname = args.out or ("objections.html" if args.fullpage
                            else "objections-card.html")
     card = tmpl.format(
@@ -1146,7 +1146,98 @@ def main():
     return 0
 
 
-TEMPLATE = """<!--kg-card-begin: html-->
+# ---------------------------------------------------------------- card
+
+# The Ghost card is the same map as the standalone page: same markup, same
+# JavaScript, same data. Rather than keep a second copy that would drift,
+# it is derived from the page template here, with class and id names
+# prefixed so nothing collides with the theme.
+
+CARD_CLASSES = ["shell","panel","stage","masthead","standfirst","search",
+    "kinds","nodl-toggle","count","legend","rows","row","meta","dl","nodl",
+    "flag","sch","adv","nopc","nopc-list","currency","foot","hide","mcard",
+    "tag","sub","it","close","more","x","zoom","hint","sw"]
+CARD_IDS = ["map","q","k-all","k-plan","k-road","k-nodl","n-nodl","n-plan",
+    "n-road","mcard","zin","zout","zreset","hint"]
+PFX = "hcn-"
+
+
+def card_from_page(page):
+    """Turn the standalone page template into a Ghost HTML card."""
+    style = page[page.find("<style>") + 7:page.find("</style>")]
+    body = page[page.find("<body>") + 6:page.find("<script>")]
+    # rfind: the head CDN scripts close before the inline one.
+    script = page[page.find("<script>"):page.rfind("</script>") + 9]
+
+    def prefix(text, in_css):
+        for c in sorted(CARD_CLASSES, key=len, reverse=True):
+            if in_css:
+                text = re.sub(r"\." + re.escape(c) + r"(?![\w-])",
+                              "." + PFX + c, text)
+            else:
+                text = text.replace('class="' + c + '"', 'class="' + PFX + c + '"')
+                text = text.replace('class="' + c + ' ', 'class="' + PFX + c + ' ')
+                text = text.replace(" " + c + '"', " " + PFX + c + '"')
+        for i in sorted(CARD_IDS, key=len, reverse=True):
+            text = text.replace('id="' + i + '"', 'id="' + PFX + i + '"')
+            text = text.replace("'" + i + "'", "'" + PFX + i + "'")
+        return text
+
+    style = prefix(style, True)
+    for c in ("row","meta","dl","nodl","sw","sq","flag","sch","adv","nopc",
+              "nopc-list","pin","planning","traffic","rows","legend","hide"):
+        style = re.sub(r"\." + PFX + re.escape(c) + r"(?![\w-])",
+                       "." + PFX + c + ",." + PFX + "shell ." + c, style)
+    body = prefix(body, False)
+    script = prefix(script, False)
+
+    # The page sizes itself to the window; a card must not. These rules
+    # are doubled ({{ }}) because the template is still a format string.
+    style = re.sub(r"html,body\{\{[^}]*\}\}", "", style)
+    style = re.sub(r"\nbody\{\{[^}]*\}\}", "", style)
+    style = style.replace(":root{", "." + PFX + "shell{")
+    style = re.sub(r"\." + PFX + r"shell\{display:flex;height:100%;[^}]*\}",
+                   "." + PFX + "shell{display:flex;flex-direction:column;"
+                   "max-width:100%;font-family:Lora,Georgia,serif;"
+                   "color:var(--ink);background:var(--paper);"
+                   "border:1px solid var(--rule);margin:2.5rem 0 1rem}", style)
+
+    head = page[page.find('<link rel="preconnect"'):page.find("<style>")]
+    return ("<!--kg-card-begin: html-->\n" + head
+            + "<style>\n"
+            # the card is still a format template, so its own braces
+            # have to be doubled like the rest of it
+            + CARD_SHELL_CSS.replace("{", "{{").replace("}", "}}")
+            + style + "\n</style>\n"
+            + '<div class="kg-width-full ' + PFX + 'shell">'
+            + body.replace('<div class="' + PFX + 'shell">', "", 1)
+            + script + "\n<!--kg-card-end: html-->\n")
+
+
+CARD_SHELL_CSS = """
+/* A box in an article, not a window: the map takes a fixed height at the
+   top and the panel runs beneath, so a reader meets the map first. */
+.hcn-shell .hcn-stage{height:min(70vh,34rem);min-height:22rem;flex:none;
+  position:relative;border-bottom:1px solid var(--rule)}
+.hcn-shell .hcn-panel{max-width:none;flex:none;width:100%;border-right:0;
+  padding:1.25rem 1.4rem 2rem;max-height:none;overflow:visible}
+.hcn-shell .hcn-masthead{margin:-1.25rem -1.4rem 1rem}
+.hcn-shell .hcn-mcard{position:static;width:auto;margin:.9rem 1.4rem 0;
+  max-height:none;box-shadow:none;border:1px solid var(--rule)}
+.hcn-shell .hcn-hint{display:none}
+.hcn-shell h1{font-size:1.3rem}
+@media (min-width:62rem){
+  .hcn-shell{flex-direction:row;align-items:stretch;height:min(78vh,44rem)}
+  .hcn-shell .hcn-panel{flex:0 0 22rem;max-width:22rem;overflow-y:auto;
+    border-right:1px solid var(--rule)}
+  .hcn-shell .hcn-stage{flex:1 1 auto;height:auto;border-bottom:0}
+  .hcn-shell .hcn-mcard{position:absolute;left:16px;bottom:16px;
+    width:min(24rem,64%);margin:0;box-shadow:0 12px 30px rgba(26,26,26,.26)}
+}
+"""
+
+
+TEMPLATE_OLD = """<!--kg-card-begin: html-->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;0,700;1,400&display=swap" rel="stylesheet">
