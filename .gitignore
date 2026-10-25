@@ -13,3 +13,6 @@ __pycache__/
 oproad_essh_gb/
 codepo_gb/
 *.zip
+scripts/objections-card*.html
+scripts/objections.html
+scripts/weekly_lists/
