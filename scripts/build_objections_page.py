@@ -1133,7 +1133,32 @@ def main():
             "Road orders are current to today."),
         generated=today.strftime("%-d %B %Y"))
 
+    if not args.fullpage:
+        # The rows, markers and legend are written above rather than by
+        # the template, so their class names are renamed here, once the
+        # page has been assembled. Renaming is idempotent: an already
+        # prefixed name no longer matches.
+        card = _rename(card, CARD_CLASSES, False)
+
     pathlib.Path(outname).write_text(card)
+
+    if not args.fullpage:
+        # Ghost strips a large <style> block out of an HTML card, so the
+        # card is also written as two files: the stylesheet to paste into
+        # the page's header code injection, and the markup for the card
+        # itself. Keeping them in step is the build's job, not yours.
+        head = card[card.find("<style>"):card.find("</style>") + 8]
+        rest = (card[:card.find("<style>")]
+                + card[card.find("</style>") + 8:])
+        base = outname[:-5] if outname.endswith(".html") else outname
+        pathlib.Path(base + "-styles.html").write_text(
+            "<!-- Paste into the page's Code injection -> Page header -->\n"
+            + head + "\n")
+        pathlib.Path(base + "-markup.html").write_text(rest)
+        print(f"-> {base}-styles.html  "
+              f"({len(head)//1024} kB)  for Code injection -> Page header")
+        print(f"-> {base}-markup.html  "
+              f"({len(rest)//1024} kB)  for the HTML card")
     print(f"\nopen today: {nplan} planning applications, {ntraffic} road schemes")
     print(f"mapped: {len(pins)} pins "
           f"({sum(1 for p in pins if p['kind']=='planning')} planning, "
@@ -1149,66 +1174,113 @@ def main():
 # ---------------------------------------------------------------- card
 
 # The Ghost card is the same map as the standalone page: same markup, same
-# JavaScript, same data. Rather than keep a second copy that would drift,
-# it is derived from the page template here, with class and id names
-# prefixed so nothing collides with the theme.
+# JavaScript, same data, derived from the page template rather than kept
+# as a second copy that would drift.
+#
+# Every class and id is renamed with a prefix so nothing collides with the
+# theme's own styles. The rename is applied to one token at a time, in the
+# CSS, the markup and the JavaScript alike, so a descendant rule such as
+# ".row .sw" survives as ".hcn-row .hcn-sw" rather than being mangled.
 
-CARD_CLASSES = ["shell","panel","stage","masthead","standfirst","search",
-    "kinds","nodl-toggle","count","legend","rows","row","meta","dl","nodl",
-    "flag","sch","adv","nopc","nopc-list","currency","foot","hide","mcard",
-    "tag","sub","it","close","more","x","zoom","hint","sw"]
-CARD_IDS = ["map","q","k-all","k-plan","k-road","k-nodl","n-nodl","n-plan",
-    "n-road","mcard","zin","zout","zreset","hint"]
 PFX = "hcn-"
+
+# Classes used in the template and in the markup the Python above writes.
+CARD_CLASSES = [
+    "shell", "panel", "stage", "masthead", "standfirst", "search", "kinds",
+    "nodl-toggle", "count", "legend", "rows", "row", "meta", "dl", "nodl",
+    "flag", "sch", "adv", "nopc", "nopc-list", "currency", "foot", "hide", "home",
+    "mcard", "tag", "sub", "it", "close", "more", "x", "zoom", "hint", "sw",
+    "sq", "pin", "planning", "traffic", "gly", "mark", "wl", "lm", "ll",
+    "on", "card",
+]
+CARD_IDS = [
+    "map", "q", "k-all", "k-plan", "k-road", "k-nodl", "n-nodl", "n-plan",
+    "n-road", "mcard", "zin", "zout", "zreset", "hint",
+]
+
+
+def _rename(text, names, prefix_in_css):
+    """Rename whole tokens only, so 'row' never matches inside 'rows'."""
+    for n in sorted(names, key=len, reverse=True):
+        esc = re.escape(n)
+        if prefix_in_css:                      # .row  ->  .hcn-row
+            text = re.sub(r"\.(" + esc + r")(?![\w-])", "." + PFX + n, text)
+        # class="row", class="row sw", class="pin planning" — only inside
+        # a class attribute, or prose like "traffic changes" gets renamed
+        # too.
+        def _in_class_attr(mt):
+            names = mt.group(1).split()
+            return 'class="' + " ".join(
+                PFX + x if x == n else x for x in names) + '"'
+        text = re.sub(r'class="([^"]*\b' + esc + r'\b[^"]*)"',
+                      _in_class_attr, text)
+        # ".row" as a selector inside JavaScript
+        text = re.sub(r"(['\"])\.(" + esc + r")(?=['\"])",
+                      lambda m: m.group(1) + "." + PFX + n, text)
+        # classList.add('hide'), classList.contains('nodl')
+        text = re.sub(r"(classList\.\w+\(')(" + esc + r")(?=')",
+                      lambda m: m.group(1) + PFX + n, text)
+        # className='pin ' + kind
+        text = re.sub(r"(className=')(" + esc + r")(?=[\s'])",
+                      lambda m: m.group(1) + PFX + n, text)
+    return text
 
 
 def card_from_page(page):
-    """Turn the standalone page template into a Ghost HTML card."""
     style = page[page.find("<style>") + 7:page.find("</style>")]
     body = page[page.find("<body>") + 6:page.find("<script>")]
-    # rfind: the head CDN scripts close before the inline one.
+    # rfind: the head's CDN script tags close before the inline one.
     script = page[page.find("<script>"):page.rfind("</script>") + 9]
+    head = page[page.find('<link rel="preconnect"'):page.find("<style>")]
 
-    def prefix(text, in_css):
-        for c in sorted(CARD_CLASSES, key=len, reverse=True):
-            if in_css:
-                text = re.sub(r"\." + re.escape(c) + r"(?![\w-])",
-                              "." + PFX + c, text)
+    # On a blank template there is no navigation, so the masthead is the
+    # reader's way back to the paper.
+    body = body.replace(
+        "<h1>", '<a class="hcn-home" href="https://hackneycitizen.co.uk/">'
+                "<h1>", 1)
+    body = body.replace("</h1>", "</h1></a>", 1)
+
+    style = _rename(style, CARD_CLASSES, True)
+    body = _rename(body, CARD_CLASSES, False)
+    script = _rename(script, CARD_CLASSES, False)
+    # The marker's class is assembled at run time from the pin's
+    # kind, so those parts have to be renamed in the expression
+    # rather than as literals.
+    # The kind filter picks its class with a ternary, which the literal
+    # rename above cannot see.
+    script = script.replace(
+        "classList.contains(kind==='plan'?'traffic':'planning')",
+        "classList.contains(kind==='plan'?'" + PFX + "traffic':'"
+        + PFX + "planning')")
+    script = script.replace(
+        "'" + PFX + "pin '+p.kind+(p.close?'':' nodl')",
+        "'" + PFX + "pin '+'" + PFX + "'+p.kind+"
+        "(p.close?'':' " + PFX + "nodl')")
+    for part in ("style", "body", "script"):
+        pass
+    for i in sorted(CARD_IDS, key=len, reverse=True):
+        for name, val in (("style", style), ("body", body), ("script", script)):
+            val = val.replace('id="' + i + '"', 'id="' + PFX + i + '"')
+            val = val.replace("'" + i + "'", "'" + PFX + i + "'")
+            val = val.replace("#" + i, "#" + PFX + i)
+            if name == "style":
+                style = val
+            elif name == "body":
+                body = val
             else:
-                text = text.replace('class="' + c + '"', 'class="' + PFX + c + '"')
-                text = text.replace('class="' + c + ' ', 'class="' + PFX + c + ' ')
-                text = text.replace(" " + c + '"', " " + PFX + c + '"')
-        for i in sorted(CARD_IDS, key=len, reverse=True):
-            text = text.replace('id="' + i + '"', 'id="' + PFX + i + '"')
-            text = text.replace("'" + i + "'", "'" + PFX + i + "'")
-        return text
+                script = val
 
-    style = prefix(style, True)
-    for c in ("row","meta","dl","nodl","sw","sq","flag","sch","adv","nopc",
-              "nopc-list","pin","planning","traffic","rows","legend","hide"):
-        style = re.sub(r"\." + PFX + re.escape(c) + r"(?![\w-])",
-                       "." + PFX + c + ",." + PFX + "shell ." + c, style)
-    body = prefix(body, False)
-    script = prefix(script, False)
-
-    # The page sizes itself to the window; a card must not. These rules
-    # are doubled ({{ }}) because the template is still a format string.
+    # The page sizes itself to the window; a card sizes itself to a box.
     style = re.sub(r"html,body\{\{[^}]*\}\}", "", style)
     style = re.sub(r"\nbody\{\{[^}]*\}\}", "", style)
-    style = style.replace(":root{", "." + PFX + "shell{")
-    style = re.sub(r"\." + PFX + r"shell\{display:flex;height:100%;[^}]*\}",
-                   "." + PFX + "shell{display:flex;flex-direction:column;"
-                   "max-width:100%;font-family:Lora,Georgia,serif;"
-                   "color:var(--ink);background:var(--paper);"
-                   "border:1px solid var(--rule);margin:2.5rem 0 1rem}", style)
+    style = style.replace(":root{{", "." + PFX + "shell{{")
+    style = re.sub(r"\." + PFX + r"shell\{\{display:flex;height:100%;[^}]*\}\}",
+                   "", style)
 
-    head = page[page.find('<link rel="preconnect"'):page.find("<style>")]
+    # Card rules go last so they win over the page's own layout.
+    shell = CARD_SHELL_CSS.replace("{", "{{").replace("}", "}}")
     return ("<!--kg-card-begin: html-->\n" + head
-            + "<style>\n"
-            # the card is still a format template, so its own braces
-            # have to be doubled like the rest of it
-            + CARD_SHELL_CSS.replace("{", "{{").replace("}", "}}")
-            + style + "\n</style>\n"
+            + "<style>\n" + style + shell + "\n</style>\n"
             + '<div class="kg-width-full ' + PFX + 'shell">'
             + body.replace('<div class="' + PFX + 'shell">', "", 1)
             + script + "\n<!--kg-card-end: html-->\n")
@@ -1216,23 +1288,39 @@ def card_from_page(page):
 
 CARD_SHELL_CSS = """
 /* A box in an article, not a window: the map takes a fixed height at the
-   top and the panel runs beneath, so a reader meets the map first. */
-.hcn-shell .hcn-stage{height:min(70vh,34rem);min-height:22rem;flex:none;
-  position:relative;border-bottom:1px solid var(--rule)}
-.hcn-shell .hcn-panel{max-width:none;flex:none;width:100%;border-right:0;
+   top and the panel runs beneath it, so a reader meets the map first. */
+.hcn-shell{display:flex;flex-direction:column;max-width:100%;
+  font-family:Lora,Georgia,serif;color:var(--ink);background:var(--paper);
+  border:1px solid var(--rule);margin:2.5rem 0 1rem}
+.hcn-shell .hcn-stage{order:-1;flex:none;height:min(70vh,34rem);
+  min-height:20rem;position:relative;overflow:hidden;
+  border-bottom:1px solid var(--rule)}
+.hcn-shell .hcn-panel{flex:none;width:100%;max-width:none;border-right:0;
   padding:1.25rem 1.4rem 2rem;max-height:none;overflow:visible}
 .hcn-shell .hcn-masthead{margin:-1.25rem -1.4rem 1rem}
 .hcn-shell .hcn-mcard{position:static;width:auto;margin:.9rem 1.4rem 0;
   max-height:none;box-shadow:none;border:1px solid var(--rule)}
 .hcn-shell .hcn-hint{display:none}
 .hcn-shell h1{font-size:1.3rem}
+.hcn-shell .hcn-home{display:block;text-decoration:none;
+  color:inherit}
+.hcn-shell .hcn-home:hover h1{text-decoration:underline;
+  text-underline-offset:3px}
+.hcn-shell .hcn-home::after{content:"Back to the Hackney Citizen";display:block;margin-top:.5rem;font-size:.78rem;
+  letter-spacing:.04em;color:#c8c6bf}
 @media (min-width:62rem){
-  .hcn-shell{flex-direction:row;align-items:stretch;height:min(78vh,44rem)}
-  .hcn-shell .hcn-panel{flex:0 0 22rem;max-width:22rem;overflow-y:auto;
-    border-right:1px solid var(--rule)}
-  .hcn-shell .hcn-stage{flex:1 1 auto;height:auto;border-bottom:0}
+  /* Wide enough for the panel beside the map, as on the full page. */
+  /* Fill the window, less the page title above and a little
+     breathing room below. */
+  .hcn-shell{flex-direction:row;align-items:stretch;
+    height:calc(100vh - 11rem);min-height:34rem;
+    margin:1.5rem 0 1rem}
+  .hcn-shell .hcn-panel{order:0;flex:0 0 22rem;max-width:22rem;
+    overflow-y:auto;border-right:1px solid var(--rule)}
+  .hcn-shell .hcn-stage{order:0;flex:1 1 auto;height:auto;border-bottom:0}
   .hcn-shell .hcn-mcard{position:absolute;left:16px;bottom:16px;
-    width:min(24rem,64%);margin:0;box-shadow:0 12px 30px rgba(26,26,26,.26)}
+    width:min(24rem,64%);margin:0;
+    box-shadow:0 12px 30px rgba(26,26,26,.26)}
 }
 """
 
@@ -1802,7 +1890,11 @@ ul.rows{{list-style:none;padding:0;margin:0}}
   var map=new maplibregl.Map({{
     container:'map',
     bounds:M.bounds, fitBoundsOptions:{{padding:24}},
-    maxBounds:[[-0.16,51.49],[0.035,51.605]],
+    // Wide enough never to constrain the fit: a very wide container
+    // would otherwise force the zoom up to keep inside the box, which
+    // crops the borough top and bottom. It still stops the reader
+    // wandering off across the country.
+    maxBounds:[[-0.45,51.35],[0.35,51.75]],
     minZoom:10.5, maxZoom:19,
     attributionControl:{{compact:true}},
     dragRotate:false, pitchWithRotate:false, touchPitch:false,
@@ -1824,6 +1916,20 @@ ul.rows{{list-style:none;padding:0;margin:0}}
     }}
   }});
   map.touchZoomRotate.disableRotation();
+  // The container is often still settling when the map initialises, so
+  // the first fit is computed against the wrong width and the borough
+  // ends up adrift in a wide card. Re-fit whenever the box changes size,
+  // until the reader moves the map themselves.
+  var userMoved=false;
+  map.on('dragstart',function(){{userMoved=true;}});
+  map.on('zoomstart',function(e){{if(e.originalEvent) userMoved=true;}});
+  if(window.ResizeObserver){{
+    new ResizeObserver(function(){{
+      map.resize();
+      if(!userMoved) map.fitBounds(M.bounds,{{padding:24,animate:false}});
+    }}).observe(map.getContainer());
+  }}
+
   map.on('load',function(){{
     // Landmark tints go under the base map's labels, so names stay
     // readable; everything else goes on top.
