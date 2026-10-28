@@ -512,6 +512,26 @@ def inside(pt, ring):
     return hit
 
 
+def ward_at(pt, wards):
+    """The ward an OSGB point falls in, or None if it is outside them all.
+    Each ward's rings are tested together, even-odd, so a ward in several
+    pieces or with a hole in it is handled the same as a simple one."""
+    for w in wards:
+        if sum(inside(pt, r) for r in w["rings"]) % 2:
+            return w["name"]
+    return None
+
+
+def ward_key(name):
+    """Ward names as the council and the boundary file both spell them:
+    'Kings Park Ward' matches "King's Park", and 'Hoxton East and
+    Shoreditch' matches 'Hoxton East & Shoreditch'."""
+    n = re.sub(r"\s+ward$", "", (name or "").strip(), flags=re.I).lower()
+    n = n.replace("&", " and ")
+    n = re.sub(r"[^a-z ]", "", n)
+    return " ".join(n.split())
+
+
 def clearest_point(ring, obstacles, halfwidth=34.0, halfheight=11.0, step=7):
     xs = [p[0] for p in ring]; ys = [p[1] for p in ring]
     best, bestscore = None, -1
@@ -682,7 +702,7 @@ def main():
     ward_centre = {}
     for w in wards:
         big = max(w["rings"], key=ring_area)
-        ward_centre[w["name"].lower()] = ring_centroid(big)
+        ward_centre[ward_key(w["name"])] = ring_centroid(big)
 
     ward_d = []
     for w in wards:
@@ -832,8 +852,7 @@ def main():
             else:
                 # No postcode in the council's own list. The ward is the
                 # only location it gives, so use that and say so.
-                wn = re.sub(r"\s+ward$", "", (r.get("ward") or "").strip(),
-                            flags=re.I).lower()
+                wn = ward_key(r.get("ward"))
                 if wn in ward_centre:
                     at, how = ward_centre[wn], "ward"
         if at is None:
@@ -841,6 +860,33 @@ def main():
             continue
         key = (round(at[0], 1), round(at[1], 1))
         bypc.setdefault(key, {"at": at, "how": how, "rows": []})["rows"].append(r)
+
+    # Which ward each pin is in, worked out from the boundaries rather
+    # than taken from the council's list, and checked against it. A
+    # disagreement usually means the postcode sits on a ward border or the
+    # council's ward is wrong; it is reported, not treated as a failure.
+    ward_clash, outside = [], []
+    for grp in bypc.values():
+        grp["ward"] = ward_at(grp["at"], wards)
+        if grp["ward"] is None:
+            outside += [r["reference"] for r in grp["rows"]]
+            continue
+        if grp["how"] == "ward":
+            continue                      # placed by the council's ward
+        for r in grp["rows"]:
+            theirs = (r.get("ward") or "").strip()
+            if theirs and ward_key(theirs) != ward_key(grp["ward"]):
+                ward_clash.append((r["reference"], theirs, grp["ward"]))
+    print(f"wards: {sum(len(g['rows']) for g in bypc.values()) - len(outside)}"
+          f" applications matched to a ward, {len(ward_clash)} where the "
+          f"council's list names a different one, {len(outside)} outside "
+          f"every ward")
+    for ref, theirs, ours in ward_clash[:15]:
+        print(f"  {ref}: council says {theirs}, the map puts it in {ours}")
+    if len(ward_clash) > 15:
+        print(f"  … and {len(ward_clash) - 15} more")
+    for ref in outside[:15]:
+        print(f"  {ref}: placed outside the borough's wards")
 
     for key, grp in bypc.items():
         rows = grp["rows"]
@@ -868,7 +914,8 @@ def main():
             "kind": "planning",
             "title": live[0]["postcode"] or live[0]["address"][:40],
             "sub": f"{len(live)} planning application"
-                   f"{'s' if len(live) != 1 else ''}",
+                   f"{'s' if len(live) != 1 else ''}"
+                   + (f" · {grp['ward']} ward" if grp["ward"] else ""),
             "approx": grp["how"] != "exact",
             "approxTxt": {"sector": "position approximate",
                           "ward": "ward only — the council's list gives no "
@@ -979,8 +1026,17 @@ def main():
                              "lon": round(llon, 6), "lat": round(llat, 6),
                              "n": len(rec["what"]), "c": TRAFFIC_COLOUR[gl],
                              "kind": "traffic", "close": close, "glyph": gl})
+                st_wards = []
+                for lon, lat in rec["ll"]:
+                    wn = ward_at(wgs84_to_osgb(lat, lon), wards)
+                    if wn and wn not in st_wards:
+                        st_wards.append(wn)
+                wtxt = (f" · {st_wards[0]} ward" if len(st_wards) == 1 else
+                        " · " + " and ".join([", ".join(st_wards[:-1]),
+                                              st_wards[-1]]) + " wards"
+                        if st_wards else "")
                 detail[pid] = {
-                    "kind": "traffic", "title": st, "sub": ref,
+                    "kind": "traffic", "title": st, "sub": ref + wtxt,
                     "approx": False, "close": close, "closeTxt": fmt(close),
                     "more": TRAFFWEB,
                     "moreTxt": "See this scheme on the council's site",
