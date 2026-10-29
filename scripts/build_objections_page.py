@@ -121,6 +121,36 @@ MANUAL_PLACE = {
     # "2026/1916": (533250, 187450),   # Woodberry Down Phase 5
 }
 
+# Places the council still lists under an old name. Matched anywhere in an
+# address or a landmark name, ignoring capitals. The address replaces the
+# council's whole address line; the name is used for map labels.
+PLACE_RENAME = {
+    "geffrye museum": ("Museum of the Home",
+                       "Museum of the Home, 136 Kingsland Road, London, E2 8EA"),
+    "clr james library": ("Dalston CLR James Library",
+                          "Dalston CLR James Library, Dalston Square, London, E8 3BQ"),
+    "c l r james library": ("Dalston CLR James Library",
+                            "Dalston CLR James Library, Dalston Square, London, E8 3BQ"),
+    "dalston library": ("Dalston CLR James Library",
+                        "Dalston CLR James Library, Dalston Square, London, E8 3BQ"),
+}
+
+
+def renamed_address(address):
+    low = (address or "").lower()
+    for old, (_name, new_address) in PLACE_RENAME.items():
+        if old in low:
+            return new_address
+    return address
+
+
+def renamed_place(name):
+    low = (name or "").lower()
+    for old, (new_name, _addr) in PLACE_RENAME.items():
+        if old in low:
+            return new_name
+    return name
+
 
 # ------------------------------------------------------------- projection
 
@@ -684,6 +714,8 @@ def main():
     if pathlib.Path(args.planning).exists():
         with open(args.planning, newline="", encoding="utf-8") as f:
             plan = list(csv.DictReader(f))
+        for r in plan:
+            r["address"] = renamed_address(r.get("address"))
 
     print(f"{len(plan)} planning applications, {len(tfeats)} traffic "
           f"restrictions, {len(roads)} road segments")
@@ -801,6 +833,7 @@ def main():
         bytheme = collections.defaultdict(list)
         biggest = {}
         for idx, theme, _cls, name in lmdata.get("landmarks", []):
+            name = renamed_place(name)
             ring = lrings[idx]
             bytheme[theme or ""].append(ring_d(ring))
             landmark_feats.append({
@@ -1444,8 +1477,9 @@ TEMPLATE_OLD = """<!--kg-card-begin: html-->
 .hkob .rdf2{{stroke:#f4ead0;stroke-width:1.5}}
 .hkob .rdf3{{stroke:#eed9a9;stroke-width:2.2}}
 .hkob .rdf4{{stroke:#e6c78d;stroke-width:3.0}}
-.hkob .wl{{font-size:11px;fill:#6f6a52;text-anchor:middle;
-  font-family:Lora,Georgia,serif;paint-order:stroke;stroke:var(--land);
+.hkob .wl{{font-size:9.5px;font-weight:600;fill:#858173;text-anchor:middle;
+  text-transform:uppercase;letter-spacing:.14em;
+  font-family:"Helvetica Neue",Arial,sans-serif;paint-order:stroke;stroke:var(--land);
   stroke-width:3px;stroke-linejoin:round;pointer-events:none}}
 .hkob .ln{{fill:none;stroke-width:2.5;stroke-linecap:round;opacity:.45}}
 .hkob /* Street labels: hidden until the reveal bands below switch them on. */
@@ -1780,10 +1814,13 @@ ul.rows{{list-style:none;padding:0;margin:0}}
 .hide{{display:none}}
 /* Ward names: drawn over the map in the page's own typeface, and taken
    away once the reader is close enough to read street names instead. */
-.wl{{font-size:12px;color:#6f6a52;text-align:center;line-height:1.15;
-  font-family:Lora,Georgia,serif;pointer-events:none;white-space:nowrap;
+.wl{{font-size:10.5px;font-weight:600;color:#858173;text-align:center;
+  line-height:1.2;text-transform:uppercase;letter-spacing:.14em;
+  font-family:"Helvetica Neue",Arial,sans-serif;pointer-events:none;
+  white-space:nowrap;
   text-shadow:0 0 3px var(--land),0 0 3px var(--land),0 0 2px var(--land)}}
-.stage[data-near] .wl{{display:none}}
+.wl::after{{content:"ward";display:block;font-size:8.5px;font-weight:400;
+  letter-spacing:.2em}}
 .pin{{cursor:pointer;width:26px;height:26px}}
 .pin svg{{display:block;overflow:visible}}
 .pin circle,.pin rect{{stroke:#fafaf7;stroke-width:2;
@@ -1983,7 +2020,10 @@ ul.rows{{list-style:none;padding:0;margin:0}}
         lines:{{type:'geojson',data:M.lines}},
         landmarks:{{type:'geojson',data:M.landmarks}}
       }},
+      // Area names come only from the ward labels, so the base map's own
+      // place names (neighbourhoods, towns) are left out altogether.
       layers:basemaps.layers('protomaps',flavor,{{lang:'en'}})
+        .filter(function(l){{return l['source-layer']!=='places';}})
     }}
   }});
   map.touchZoomRotate.disableRotation();
@@ -2046,12 +2086,6 @@ ul.rows{{list-style:none;padding:0;margin:0}}
     el.className='wl'; el.innerHTML=w.html;
     new maplibregl.Marker({{element:el}}).setLngLat([w.lon,w.lat]).addTo(map);
   }});
-  var stage=document.querySelector('.stage');
-  function near(){{
-    if(map.getZoom()>=14.3) stage.setAttribute('data-near','');
-    else stage.removeAttribute('data-near');
-  }}
-  map.on('zoom',near); near();
 
   // The markers are ordinary page elements, so they keep the page's
   // styling, take keyboard focus and answer to the filters below.
